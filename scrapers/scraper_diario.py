@@ -31,6 +31,9 @@ from pathlib import Path
 import gspread
 from google.oauth2.service_account import Credentials
 from playwright.async_api import async_playwright
+from playwright_stealth import Stealth
+
+_stealth = Stealth()
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -39,12 +42,44 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from scrapers.scraper_inicial import (
-    BROWSER_ARGS, CONTEXT_OPTS,
-    extract_cards, fetch_detail, new_stealth_page, wait_for_cf,
+    extract_cards, fetch_detail, wait_for_cf,
     parse_price, parse_int,
 )
 from pipeline.mapear_barrios import resolver_barrio
 from pipeline.extraer_tipo_url import parsear_slug
+
+# ---------------------------------------------------------------------------
+# Browser args para entorno headless/CI (menos detectable en Linux)
+# ---------------------------------------------------------------------------
+CI_BROWSER_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process",
+    "--window-size=1280,800",
+]
+CI_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+async def new_stealth_page_diario(pw):
+    """Browser con args reforzados para CI/headless."""
+    browser = await pw.chromium.launch(headless=True, args=CI_BROWSER_ARGS)
+    context = await browser.new_context(
+        user_agent=CI_USER_AGENT,
+        viewport={"width": 1280, "height": 800},
+        locale="es-AR",
+    )
+    page = await context.new_page()
+    await _stealth.apply_stealth_async(page)
+    return browser, page
+
 
 # ---------------------------------------------------------------------------
 # Configuración
@@ -396,7 +431,7 @@ async def recorrer_listado(pw, existentes: dict, max_paginas=None) -> tuple[set,
     nuevos       = []
     actualizados = []
 
-    list_browser, list_page = await new_stealth_page(pw)
+    list_browser, list_page = await new_stealth_page_diario(pw)
     try:
         await list_page.goto(BASE_URL, wait_until="domcontentloaded")
         passed = await wait_for_cf(list_page)

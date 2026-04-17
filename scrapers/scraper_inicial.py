@@ -139,7 +139,7 @@ def parse_int(text):
 # ---------------------------------------------------------------------------
 # Esperar Cloudflare
 # ---------------------------------------------------------------------------
-async def wait_for_cf(page, timeout_secs=30):
+async def wait_for_cf(page, timeout_secs=60):
     for _ in range(timeout_secs):
         title = await page.title()
         if "moment" not in title.lower() and "cloudflare" not in title.lower():
