@@ -434,11 +434,11 @@ async def recorrer_listado(pw, existentes: dict, max_paginas=None) -> tuple[set,
     list_browser, list_page = await new_stealth_page_diario(pw)
     try:
         await list_page.goto(BASE_URL, wait_until="domcontentloaded")
+        await list_page.wait_for_timeout(random.randint(8000, 12000))
         passed = await wait_for_cf(list_page)
         if not passed:
             print("  [!] No se pudo superar Cloudflare en el listado")
             return ids_vistos, nuevos, actualizados
-        await list_page.wait_for_timeout(2000)
 
         page_num      = 0
         total_tarjetas = 0
@@ -661,6 +661,9 @@ async def main(max_paginas=None, sin_sheets=False):
         if max_paginas:
             print("      SALTEADO (corrida parcial con --max-paginas)")
             ids_inactivos = []
+        elif len(ids_vistos) == 0:
+            print("  [!] ADVERTENCIA: No se visitó ninguna página — marcado de inactivas CANCELADO")
+            ids_inactivos = []
         else:
             ids_inactivos = marcar_inactivas_sheets(sh, ids_vistos)
             print(f"      {len(ids_inactivos)} propiedades marcadas inactivas")
@@ -714,6 +717,9 @@ async def main(max_paginas=None, sin_sheets=False):
 
         if max_paginas:
             print("      Marcado de inactivas SALTEADO (corrida parcial con --max-paginas)")
+            ids_inactivos = []
+        elif len(ids_vistos) == 0:
+            print("  [!] ADVERTENCIA: No se visitó ninguna página — marcado de inactivas CANCELADO")
             ids_inactivos = []
         else:
             ids_inactivos = marcar_inactivas_db(ids_vistos, hoy)
