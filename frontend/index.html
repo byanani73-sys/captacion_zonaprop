@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1a73e8">
+<title>Captación ZonaProp</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f5f6f8;
+  color: #1a1a1a;
+  min-height: 100vh;
+}
+
+/* ===== HEADER ===== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: #111827;
+  color: #fff;
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.header .counter { font-size: .85rem; color: #94a3b8; }
+
+/* Mobile-only filter button */
+.btn-filtros {
+  display: none;
+  align-items: center; gap: 5px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #e2e8f0;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: .9rem;
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.filter-count { font-weight: 700; color: #60a5fa; }
+
+/* Filter overlay (mobile) */
+.filter-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 150;
+}
+.filter-overlay.open { display: block; }
+
+/* Drawer header — visible only inside mobile drawer */
+.drawer-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.drawer-title { font-weight: 700; font-size: 1.1rem; color: #111827; }
+.drawer-close {
+  background: none; border: none;
+  font-size: 1.6rem; cursor: pointer;
+  color: #64748b; line-height: 1;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== FILTERS BAR (desktop) / DRAWER (mobile) ===== */
+.filters {
+  position: sticky; top: 49px; z-index: 90;
+  background: #fff;
+  padding: 10px 24px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.filters select {
+  font-size: .85rem;
+  padding: 6px 10px; min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+.price-input-group {
+  display: flex; align-items: center; gap: 6px; font-size: .85rem;
+}
+.price-input-group input[type="text"] {
+  width: 110px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: .85rem;
+}
+.filters .checkbox-group {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .85rem; cursor: pointer; user-select: none;
+  min-height: 34px;
+}
+.filters .checkbox-group input { cursor: pointer; width: 15px; height: 15px; }
+
+/* ===== EXCLUIR BUTTON (panel) ===== */
+.btn-excluir {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 16px;
+  background: #fff5f5;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: .88rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s;
+}
+.btn-excluir:hover { background: #fee2e2; }
+.btn-excluir.reincluir {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #86efac;
+}
+.btn-excluir.reincluir:hover { background: #dcfce7; }
+
+/* Excluded row highlight */
+tr.row-excluida { background: #fff5f5 !important; opacity: .7; }
+.prop-card.card-excluida { opacity: .55; border-color: #fca5a5; }
+
+/* Apply-and-close button — mobile only */
+.btn-aplicar {
+  display: none;
+  width: 100%;
+  padding: 15px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 50px;
+  margin-top: 6px;
+}
+
+/* ===== TOGGLE BUTTONS ===== */
+/* Full-width break between filter row 1 and row 2 */
+.filter-row-break {
+  width: 100%;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 2px 0;
+}
+/* Row 2: toggle groups side by side */
+.filter-row-toggles {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 20px;
+}
+/* Separator between TIPO and OPERACIÓN */
+.toggle-group + .toggle-group {
+  padding-left: 20px;
+  border-left: 1px solid #e0e0e0;
+}
+.tg-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.tg-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.toggle-btn {
+  padding: 4px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: .8rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+  min-height: 28px;
+  user-select: none;
+}
+.toggle-btn:hover { background: #e2e8f0; border-color: #94a3b8; }
+.toggle-btn.active {
+  background: #1a73e8;
+  color: #fff;
+  border-color: #1a73e8;
+}
+
+/* ===== TABLE ===== */
+.table-wrapper {
+  padding: 0 24px 24px;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  margin-top: 12px;
+}
+thead th {
+  background: #f8fafc;
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: .8rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 2px solid #e2e8f0;
+  position: relative;
+}
+thead th:hover { background: #eef2f7; }
+thead th .sort-arrow { margin-left: 4px; font-size: .7rem; color: #94a3b8; }
+thead th.sorted .sort-arrow { color: #111827; }
+tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: background .1s;
+}
+tbody tr:nth-child(even) { background: #fafbfc; }
+tbody tr:hover { background: #eef2ff; }
+tbody tr.active { background: #dbeafe; }
+td {
+  padding: 10px 12px;
+  font-size: .88rem;
+  vertical-align: middle;
+}
+td.col-precio-m2 { font-weight: 700; font-size: 1rem; color: #111827; }
+td.col-nota {
+  max-width: 140px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  color: #64748b; font-size: .82rem;
+}
+td.col-tipo { font-size: .8rem; white-space: nowrap; }
+td.col-op   { font-size: .78rem; white-space: nowrap; color: #64748b; }
+td.col-ver  { text-align: center; }
+td.col-ver a { color: #2563eb; text-decoration: none; font-size: 1.1rem; font-weight: 700; }
+td.col-ver a:hover { color: #1d4ed8; }
+
+/* ===== MOBILE PROPERTY CARDS ===== */
+.cards-wrapper {
+  /* hidden on desktop; flex on mobile via media query */
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 80px;
+}
+.prop-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: background .1s;
+}
+.prop-card:active { background: #f0f7ff; }
+.prop-card.active  { border-color: #3b82f6; background: #eff6ff; }
+.pc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  gap: 8px;
+}
+.pc-barrio { font-weight: 700; font-size: 1rem; color: #111827; }
+.pc-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.pc-tag {
+  background: #f1f5f9; color: #475569;
+  font-size: .7rem; font-weight: 600;
+  padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; white-space: nowrap;
+}
+.pc-tag-op { background: #eff6ff; color: #2563eb; }
+.pc-pm2 {
+  font-size: 1.55rem; font-weight: 800;
+  color: #1d4ed8; line-height: 1.1;
+  margin-bottom: 4px;
+}
+.pc-pm2 .pc-pm2-unit { font-size: .78rem; font-weight: 500; color: #64748b; }
+.pc-row2 {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  font-size: .85rem; color: #475569;
+  margin-bottom: 4px;
+}
+.pc-row3 {
+  font-size: .82rem; color: #64748b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 7px;
+}
+.pc-row4 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pc-nota {
+  font-size: .8rem; color: #64748b;
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 200px;
+}
+
+/* ===== BADGES ===== */
+.badge {
+  display: inline-block;
+  font-size: .68rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .03em;
+  margin-right: 4px;
+}
+.badge-nuevo      { background: #dc2626; color: #fff; }
+.badge-baja       { background: #ea580c; color: #fff; cursor: help; }
+.badge-sospechoso { background: #e2e8f0; color: #64748b; cursor: help; }
+
+/* Estado badges */
+.estado-badge {
+  display: inline-block;
+  font-size: .75rem; font-weight: 600;
+  padding: 3px 9px; border-radius: 10px; white-space: nowrap;
+}
+.estado-sin-llamar    { background: #e2e8f0; color: #475569; }
+.estado-no-atendio    { background: #fef08a; color: #854d0e; }
+.estado-no-interesado { background: #fecaca; color: #991b1b; }
+.estado-interesado    { background: #bbf7d0; color: #166534; }
+.estado-negociando    { background: #bfdbfe; color: #1e40af; }
+.estado-captado       { background: #111827; color: #fff; }
+
+/* ===== PANEL ===== */
+.overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.25);
+  z-index: 200;
+}
+.overlay.open { display: block; }
+.panel {
+  position: fixed; top: 0; right: -460px; bottom: 0;
+  width: 440px; max-width: 100vw;
+  background: #fff;
+  z-index: 210;
+  box-shadow: -4px 0 24px rgba(0,0,0,.12);
+  transition: right .25s ease;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.panel.open { right: 0; }
+.panel-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+}
+.panel-header h2 { font-size: 1.3rem; font-weight: 700; }
+.panel-header .panel-sub { color: #64748b; font-size: .9rem; margin-top: 4px; }
+.panel-close {
+  position: absolute; top: 16px; right: 16px;
+  background: none; border: none; font-size: 1.5rem;
+  cursor: pointer; color: #64748b; line-height: 1;
+  min-width: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.panel-close:hover { color: #111827; }
+.panel-body { padding: 20px 24px; flex: 1; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-bottom: 20px;
+}
+.card {
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: 12px; text-align: center;
+}
+.card .card-value { font-size: 1.15rem; font-weight: 700; color: #111827; }
+.card .card-label { font-size: .72rem; color: #64748b; text-transform: uppercase; margin-top: 2px; }
+.card.card-highlight { border-color: #3b82f6; background: #eff6ff; }
+.card.card-highlight .card-value { color: #1d4ed8; }
+
+.price-change { margin-bottom: 16px; }
+.price-change .old-price { text-decoration: line-through; color: #94a3b8; font-size: .95rem; margin-right: 8px; }
+.price-change .new-price { color: #16a34a; font-weight: 700; font-size: 1.1rem; }
+
+.panel-field { margin-bottom: 16px; }
+.panel-field label {
+  display: block; font-size: .8rem; font-weight: 600;
+  color: #475569; margin-bottom: 4px; text-transform: uppercase;
+}
+.panel-field select, .panel-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: .9rem;
+  font-family: inherit;
+}
+.panel-field textarea { resize: vertical; min-height: 70px; }
+
+.panel-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: #2563eb; text-decoration: none; font-weight: 600;
+  font-size: .9rem; margin-bottom: 20px;
+}
+.panel-link:hover { text-decoration: underline; }
+.panel-warning {
+  background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px;
+  padding: 8px 12px; font-size: .82rem; color: #92400e; margin-bottom: 16px;
+}
+
+/* ===== SAVE INDICATOR ===== */
+.save-indicator {
+  font-size: .78rem; height: 1.2em;
+  margin-top: -10px; margin-bottom: 10px;
+  color: #94a3b8; transition: color .2s;
+}
+.save-indicator.saved { color: #16a34a; }
+
+/* ===== LOGIN ===== */
+.login-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; background: #f5f6f8;
+}
+.login-box {
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.1);
+  padding: 48px 40px; text-align: center;
+  max-width: 400px; width: 90%;
+}
+.login-box h1 { font-size: 1.6rem; font-weight: 700; color: #111827; margin-bottom: 8px; }
+.login-box p  { color: #64748b; font-size: .9rem; margin-bottom: 32px; }
+.btn-google {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #fff; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 12px 24px; font-size: .95rem; font-weight: 600; color: #3c4043;
+  cursor: pointer; transition: background .15s, box-shadow .15s; font-family: inherit;
+}
+.btn-google:hover { background: #f8f9fa; box-shadow: 0 1px 6px rgba(0,0,0,.1); }
+.btn-google svg { width: 20px; height: 20px; }
+.login-error { color: #dc2626; font-size: .85rem; margin-top: 16px; display: none; }
+
+/* ===== LOGOUT ===== */
+.btn-logout {
+  background: none; border: 1px solid #475569; color: #cbd5e1;
+  padding: 6px 14px; border-radius: 6px; font-size: .8rem;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.btn-logout:hover { background: #1f2937; color: #fff; }
+
+.app-container { display: none; }
+
+/* ===== LOADING ===== */
+.loading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 80px 24px; gap: 16px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 4px solid #e2e8f0; border-top-color: #3b82f6;
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text  { color: #64748b; font-size: .9rem; }
+.loading-error { color: #dc2626; font-size: .9rem; text-align: center; }
+
+/* ===== MOBILE ===== */
+@media (max-width: 768px) {
+
+  /* Header adjustments */
+  .header { padding: 10px 14px; }
+  .header h1 { font-size: 1.05rem; }
+  .header .counter { display: none; }
+  .btn-filtros { display: flex; }
+
+  /* Filters bar → bottom drawer */
+  .filters {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 160;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 18px 18px 20px;
+    max-height: 84vh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid #e2e8f0;
+    transform: translateY(calc(100% + 4px));
+    transition: transform .3s cubic-bezier(.32,.72,0,1);
+    box-shadow: 0 -4px 32px rgba(0,0,0,.14);
+  }
+  .filters.open { transform: translateY(0); }
+
+  /* Drawer internal header */
+  .drawer-header { display: flex; }
+
+  /* Larger touch targets inside drawer */
+  .filters select   { min-height: 44px; font-size: 16px; padding: 10px 12px; }
+  .price-input-group input[type="text"] { min-height: 44px; font-size: 16px; padding: 10px 12px; width: auto; flex: 1; }
+  .filters .checkbox-group { min-height: 44px; font-size: .95rem; gap: 10px; }
+  .filters .checkbox-group input { width: 18px; height: 18px; }
+  .price-input-group { flex-wrap: wrap; }
+  .toggle-btn { min-height: 44px; padding: 8px 16px; font-size: .88rem; border-radius: 10px; }
+  .filter-row-break { display: none; }
+  .filter-row-toggles { flex-direction: column; gap: 14px; width: 100%; }
+  .toggle-group + .toggle-group { border-left: none; padding-left: 0; border-top: 1px solid #e0e0e0; padding-top: 14px; }
+  .toggle-group { padding-right: 0; }
+
+  /* Show apply button */
+  .btn-aplicar { display: block; }
+
+  /* Table hidden → cards shown */
+  .table-wrapper { display: none !important; }
+  .cards-wrapper { display: flex; }
+
+  /* Panel → bottom sheet */
+  .panel {
+    top: auto;
+    right: 0; left: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.16);
+    /* slide from bottom instead of right */
+    bottom: calc(-88vh - 4px);
+    transition: bottom .3s cubic-bezier(.32,.72,0,1);
+  }
+  .panel.open { bottom: 0; right: 0; }
+
+  /* Panel inputs: 16px prevents iOS auto-zoom */
+  .panel-field select,
+  .panel-field textarea { font-size: 16px; min-height: 44px; }
+
+  /* Card grid: 2 cols on mobile */
+  .card-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <h1>Captación ZonaProp</h1>
+    <p>Iniciá sesión para acceder a la aplicación</p>
+    <button class="btn-google" id="btnGoogle">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.01 24.01 0 0 0 0 21.56l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP (hidden until authenticated) -->
+<div class="app-container" id="appContainer">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>Captación ZonaProp</h1>
+  <div class="header-right">
+    <span class="counter" id="counter">Mostrando 0 de 0 propiedades</span>
+    <button class="btn-filtros" id="btnFiltros">⊞ Filtros<span class="filter-count" id="filtrosCount"></span></button>
+    <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
+  </div>
+</div>
+
+<!-- FILTER OVERLAY (mobile backdrop) -->
+<div class="filter-overlay" id="filterOverlay"></div>
+
+<!-- FILTERS (desktop bar / mobile drawer) -->
+<div class="filters" id="filtersBar">
+
+  <!-- Drawer header — visible only on mobile -->
+  <div class="drawer-header">
+    <span class="drawer-title">Filtros</span>
+    <button class="drawer-close" id="btnDrawerClose">&times;</button>
+  </div>
+
+  <select id="filterBarrio"><option value="">Todos los barrios</option></select>
+  <select id="filterEstado">
+    <option value="">Todos los estados</option>
+    <option value="Sin llamar">Sin llamar</option>
+    <option value="Llamado / no atendio">Llamado / no atendio</option>
+    <option value="Hablo - no interesado">Hablo - no interesado</option>
+    <option value="Hablo - interesado">Hablo - interesado</option>
+    <option value="Negociando / volver a llamar">Negociando / volver a llamar</option>
+    <option value="Captado">Captado</option>
+  </select>
+
+  <label class="checkbox-group"><input type="checkbox" id="filterNuevos"> Solo nuevos</label>
+  <label class="checkbox-group"><input type="checkbox" id="filterBaja"> Solo baja de precio</label>
+  <label class="checkbox-group"><input type="checkbox" id="filterExcluidas"> Mostrar excluidas</label>
+
+  <div class="price-input-group">
+    <span>Precio:</span>
+    <input type="text" id="precioMin" placeholder="" inputmode="numeric">
+    <span>–</span>
+    <input type="text" id="precioMax" placeholder="" inputmode="numeric">
+  </div>
+  <div class="price-input-group">
+    <span>USD/m²:</span>
+    <input type="text" id="pm2Min" placeholder="" inputmode="numeric">
+    <span>–</span>
+    <input type="text" id="pm2Max" placeholder="" inputmode="numeric">
+  </div>
+  <div class="price-input-group">
+    <span>Top barrio:</span>
+    <input type="text" id="topN" placeholder="Todos" inputmode="numeric" style="width:68px">
+  </div>
+
+  <!-- Row 2: toggles -->
+  <div class="filter-row-break"></div>
+  <div class="filter-row-toggles">
+
+    <!-- Toggle: Tipo de propiedad -->
+    <div class="toggle-group">
+      <span class="tg-label">Tipo</span>
+      <div class="tg-btns">
+        <button class="toggle-btn" data-group="tipo" data-value="Departamento">Depto</button>
+        <button class="toggle-btn" data-group="tipo" data-value="PH">PH</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Casa">Casa</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Cochera">Cochera</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Oficina">Oficina</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Local Comercial">Local</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Terreno">Terreno</button>
+        <button class="toggle-btn" data-group="tipo" data-value="Otro">Otro</button>
+      </div>
+    </div>
+
+    <!-- Toggle: Operación -->
+    <div class="toggle-group">
+      <span class="tg-label">Operación</span>
+      <div class="tg-btns">
+        <button class="toggle-btn" data-group="op" data-value="Venta">Venta</button>
+        <button class="toggle-btn" data-group="op" data-value="Alquiler">Alquiler</button>
+        <button class="toggle-btn" data-group="op" data-value="Alquiler Temporario">Temporario</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mobile: apply & close -->
+  <button class="btn-aplicar" id="btnAplicarFiltros">Aplicar y cerrar</button>
+</div>
+
+<!-- LOADING -->
+<div class="loading" id="loadingIndicator">
+  <div class="spinner"></div>
+  <div class="loading-text">Cargando propiedades...</div>
+</div>
+
+<!-- TABLE (desktop) -->
+<div class="table-wrapper" id="tableWrapper" style="display:none">
+  <table>
+    <thead><tr id="tableHead"></tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<!-- CARDS (mobile) -->
+<div class="cards-wrapper" id="cardsWrapper" style="display:none"></div>
+
+<!-- OVERLAY + PANEL -->
+<div class="overlay" id="overlay"></div>
+<div class="panel" id="panel">
+  <div class="panel-header">
+    <button class="panel-close" id="panelClose">&times;</button>
+    <h2 id="panelBarrio"></h2>
+    <div class="panel-sub" id="panelSub"></div>
+  </div>
+  <div class="panel-body">
+    <div class="price-change" id="panelPriceChange" style="display:none">
+      <span class="old-price" id="panelOldPrice"></span>
+      <span class="new-price" id="panelNewPrice"></span>
+    </div>
+    <div class="panel-warning" id="panelWarning" style="display:none">Precio posiblemente incompleto</div>
+    <div class="card-grid" id="panelCards"></div>
+    <a class="panel-link" id="panelLink" href="#" target="_blank">Ver en ZonaProp &rarr;</a>
+    <div class="panel-field">
+      <label>Estado</label>
+      <select id="panelEstado"></select>
+    </div>
+    <div class="panel-field">
+      <label>Nota</label>
+      <textarea id="panelNota" placeholder="Agregar nota..."></textarea>
+    </div>
+    <div class="save-indicator" id="saveIndicator"></div>
+    <button class="btn-excluir" id="btnExcluir">🚫 Excluir — es inmobiliaria</button>
+  </div>
+</div>
+
+</div><!-- /app-container -->
+
+<script>
+// ===== FIREBASE AUTH =====
+const firebaseConfig = {
+  apiKey: "AIzaSyAe0TL0tnYzxJvAfETbQ2oXIsWhpVIVPWA",
+  authDomain: "captacion-zonaprop-4b56a.firebaseapp.com",
+  projectId: "captacion-zonaprop-4b56a",
+  storageBucket: "captacion-zonaprop-4b56a.firebasestorage.app",
+  messagingSenderId: "1020081308705",
+  appId: "1:1020081308705:web:bdfd9fd90c3d6f2ff5cf60"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+const EMAILS_AUTORIZADOS = [];
+
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appContainer").style.display = "block";
+}
+function showLogin() {
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("appContainer").style.display = "none";
+  document.getElementById("loginError").style.display = "none";
+}
+function showError(msg) {
+  const el = document.getElementById("loginError");
+  el.textContent = msg; el.style.display = "block";
+}
+function checkAccess(user) {
+  if (EMAILS_AUTORIZADOS.length === 0) return true;
+  return EMAILS_AUTORIZADOS.includes(user.email);
+}
+
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    if (checkAccess(user)) { showApp(); initApp(); }
+    else { showError("No tenes acceso (" + user.email + ")"); auth.signOut(); }
+  } else {
+    showLogin();
+  }
+});
+
+document.getElementById("btnGoogle").addEventListener("click", function() {
+  auth.signInWithPopup(googleProvider).catch(function(err) {
+    if (err.code !== "auth/popup-closed-by-user") showError("Error: " + err.message);
+  });
+});
+document.getElementById("btnLogout").addEventListener("click", function() { auth.signOut(); });
+
+// ===== APP INIT =====
+let appInitialized = false;
+async function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
+  try {
+    await cargarPropiedades();
+    document.getElementById("loadingIndicator").style.display = "none";
+    // Remove inline style so CSS media query controls visibility
+    document.getElementById("tableWrapper").removeAttribute("style");
+    document.getElementById("cardsWrapper").removeAttribute("style");
+    initFilters();
+    applyFilters();
+  } catch (err) {
+    document.getElementById("loadingIndicator").innerHTML =
+      '<div class="loading-error">Error al cargar datos: ' + err.message + '</div>';
+  }
+}
+
+// ===== APPS SCRIPT =====
+// Headers: id_zonaprop, barrio_simple, orden_barrio, direccion, precio_actual,
+// m2_totales, m2_cubiertos, m2_descubiertos, m2_tasables, precio_por_m2_tasable,
+// antiguedad, url, estado, nota, fecha_primera_vez, ..., tipo_operacion, tipo_propiedad
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBfwlMtbgpCbisKFqZxzdWNZAePzzG8XbGaBeL7Pe_g5Hv3egavwpkfEZbXediqB5cPg/exec";
+const API_KEY = "captacion-zp-2024-secreto";
+
+function parseProp(obj) {
+  return {
+    id:                obj.id_zonaprop               || "",
+    barrio_simple:     obj.barrio_simple              || "",
+    orden_barrio:      parseInt(obj.orden_barrio)     || 99,
+    direccion:         obj.direccion                  || "",
+    precio:            parseFloat(obj.precio_actual)  || 0,
+    m2_totales:        parseFloat(obj.m2_totales)     || 0,
+    m2_cubiertos:      parseFloat(obj.m2_cubiertos)   || 0,
+    m2_descubiertos:   parseFloat(obj.m2_descubiertos)|| 0,
+    m2_tasables:       parseFloat(obj.m2_tasables)    || 0,
+    precio_m2_tasable: parseFloat(obj.precio_por_m2_tasable) || 0,
+    antiguedad:        obj.antiguedad                 || "-",
+    url:               obj.url                       || "",
+    estado:            obj.estado                    || "Sin llamar",
+    nota:              obj.nota                      || "",
+    fecha_ingreso:     obj.fecha_primera_vez         || "",
+    tipo_propiedad:    obj.tipo_propiedad             || "",
+    tipo_operacion:    obj.tipo_operacion             || "",
+    excluida:          obj.excluida === "TRUE" || obj.excluida === true || obj.excluida === "true" || obj.excluida === "1",
+    es_nuevo:          false,
+    bajo_precio:       false,
+    precio_anterior:   null
+  };
+}
+
+async function cargarPropiedades() {
+  const email = firebase.auth().currentUser.email;
+  const url = APPS_SCRIPT_URL + "?action=leer&key=" + encodeURIComponent(API_KEY) + "&email=" + encodeURIComponent(email);
+  const response = await fetch(url);
+  const json = await response.json();
+  if (json.error) throw new Error(json.error);
+  data = (json.propiedades || []).map(parseProp).filter(d => d.id && d.precio > 0);
+  console.log("Cargadas " + data.length + " propiedades desde Apps Script");
+}
+
+async function guardarCambio(id, campo, valor) {
+  const indicator = document.getElementById("saveIndicator");
+  indicator.textContent = "Guardando...";
+  indicator.className = "save-indicator";
+  try {
+    const email = firebase.auth().currentUser.email;
+    const url = APPS_SCRIPT_URL + "?action=actualizar&key=" + encodeURIComponent(API_KEY)
+      + "&email=" + encodeURIComponent(email)
+      + "&id=" + encodeURIComponent(id)
+      + "&campo=" + encodeURIComponent(campo)
+      + "&valor=" + encodeURIComponent(valor);
+    const response = await fetch(url);
+    await response.json();
+    indicator.textContent = "✓ Guardado";
+    indicator.className = "save-indicator saved";
+    setTimeout(() => { indicator.textContent = ""; indicator.className = "save-indicator"; }, 2500);
+  } catch (err) {
+    indicator.textContent = "Error al guardar";
+    indicator.className = "save-indicator";
+    console.error("guardarCambio error:", err);
+  }
+}
+
+// ===== STATE =====
+let data     = [];
+let filtered = [];
+let sortCol  = "orden_barrio";
+let sortDir  = 1;
+let activeId = null;
+
+// Toggle filter state — with defaults
+const toggleState = {
+  tipo: new Set(["Departamento", "PH", "Casa", "Terreno"]),
+  op:   new Set(["Venta"]),
+};
+
+const TIPOS_CONOCIDOS = new Set(["Departamento","PH","Casa","Cochera","Oficina","Local Comercial","Terreno"]);
+
+const TIPO_ABREV = {
+  "Departamento":    "Depto",
+  "PH":              "PH",
+  "Casa":            "Casa",
+  "Cochera":         "Cochera",
+  "Local Comercial": "Local",
+  "Oficina":         "Ofic.",
+  "Terreno":         "Terreno",
+  "Galpón":          "Galpón",
+  "Depósito":        "Depósito",
+  "Consultorio":     "Consul.",
+  "Hotel":           "Hotel",
+  "Bóveda":          "Bóveda",
+  "Fondo de Comercio":"Fdo.Com.",
+};
+
+const ESTADOS = [
+  "Sin llamar","Llamado / no atendio","Hablo - no interesado",
+  "Hablo - interesado","Negociando / volver a llamar","Captado"
+];
+const ESTADO_CLASS = {
+  "Sin llamar":                    "estado-sin-llamar",
+  "Llamado / no atendio":         "estado-no-atendio",
+  "Hablo - no interesado":        "estado-no-interesado",
+  "Hablo - interesado":           "estado-interesado",
+  "Negociando / volver a llamar": "estado-negociando",
+  "Captado":                      "estado-captado"
+};
+
+const COLUMNS = [
+  { key:"barrio_simple",    label:"Barrio",           sortKey:"orden_barrio" },
+  { key:"tipo_propiedad",   label:"Tipo" },
+  { key:"tipo_operacion",   label:"Op." },
+  { key:"direccion",        label:"Dirección" },
+  { key:"precio_m2_tasable",label:"USD/m\u00b2 tas",  numeric:true },
+  { key:"precio",           label:"Precio",           numeric:true },
+  { key:"m2_totales",       label:"m\u00b2 tot",      numeric:true },
+  { key:"m2_tasables",      label:"m\u00b2 tas",      numeric:true },
+  { key:"m2_cubiertos",     label:"m\u00b2 cub",      numeric:true },
+  { key:"m2_descubiertos",  label:"m\u00b2 des",      numeric:true },
+  { key:"antiguedad",       label:"Antigüedad" },
+  { key:"estado",           label:"Estado" },
+  { key:"nota",             label:"Nota" },
+  { key:"ver",              label:"Ver",              noSort:true }
+];
+
+const PRECIO_SOSPECHOSO = 800;
+function isSospechoso(d) { return d.precio_m2_tasable > 0 && d.precio_m2_tasable < PRECIO_SOSPECHOSO; }
+
+// ===== UTILS =====
+function fmtUSD(n) { return "USD " + n.toLocaleString("es-AR"); }
+function fmtNum(n) { return n != null ? n.toLocaleString("es-AR") : "-"; }
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s; return d.innerHTML;
+}
+
+// ===== TOGGLE BUTTONS =====
+document.querySelectorAll(".toggle-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const group = btn.dataset.group;
+    const value = btn.dataset.value;
+    if (toggleState[group].has(value)) toggleState[group].delete(value);
+    else toggleState[group].add(value);
+    syncToggleUI();
+    applyFilters();
+  });
+});
+
+function syncToggleUI() {
+  document.querySelectorAll(".toggle-btn").forEach(btn => {
+    btn.classList.toggle("active", toggleState[btn.dataset.group].has(btn.dataset.value));
+  });
+  updateFilterCount();
+}
+
+// ===== FILTER DRAWER (mobile) =====
+const filtersBar    = document.getElementById("filtersBar");
+const filterOverlay = document.getElementById("filterOverlay");
+
+function openFilterDrawer() {
+  filtersBar.classList.add("open");
+  filterOverlay.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeFilterDrawer() {
+  filtersBar.classList.remove("open");
+  filterOverlay.classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+document.getElementById("btnFiltros").addEventListener("click", openFilterDrawer);
+document.getElementById("btnDrawerClose").addEventListener("click", closeFilterDrawer);
+filterOverlay.addEventListener("click", closeFilterDrawer);
+document.getElementById("btnAplicarFiltros").addEventListener("click", () => {
+  applyFilters();
+  closeFilterDrawer();
+});
+
+// ===== FILTER COUNT BADGE =====
+function updateFilterCount() {
+  let n = 0;
+  if (document.getElementById("filterBarrio").value) n++;
+  if (document.getElementById("filterEstado").value) n++;
+  if (document.getElementById("filterNuevos").checked) n++;
+  if (document.getElementById("filterBaja").checked) n++;
+  if (parsePriceInput(document.getElementById("precioMin").value)) n++;
+  if (parsePriceInput(document.getElementById("precioMax").value)) n++;
+  if (parsePriceInput(document.getElementById("pm2Min").value)) n++;
+  if (parsePriceInput(document.getElementById("pm2Max").value)) n++;
+  if (document.getElementById("topN").value) n++;
+  n += toggleState.tipo.size + toggleState.op.size;
+  const el = document.getElementById("filtrosCount");
+  el.textContent = n > 0 ? " (" + n + ")" : "";
+}
+
+// ===== INIT FILTERS =====
+function initFilters() {
+  const barrios = [...new Set(data.map(d => d.barrio_simple))];
+  barrios.sort((a, b) => {
+    const oa = data.find(d => d.barrio_simple === a)?.orden_barrio || 99;
+    const ob = data.find(d => d.barrio_simple === b)?.orden_barrio || 99;
+    return oa - ob;
+  });
+  const sel = document.getElementById("filterBarrio");
+  barrios.forEach(b => {
+    const o = document.createElement("option");
+    o.value = b; o.textContent = b; sel.appendChild(o);
+  });
+
+  const prices  = data.map(d => d.precio).filter(p => p > 0);
+  const validPm2 = data.filter(d => !isSospechoso(d) && d.precio_m2_tasable > 0).map(d => d.precio_m2_tasable);
+  if (prices.length) {
+    document.getElementById("precioMin").placeholder = Math.min(...prices).toLocaleString("es-AR");
+    document.getElementById("precioMax").placeholder = Math.max(...prices).toLocaleString("es-AR");
+  }
+  if (validPm2.length) {
+    document.getElementById("pm2Min").placeholder = Math.min(...validPm2).toLocaleString("es-AR");
+    document.getElementById("pm2Max").placeholder = Math.max(...validPm2).toLocaleString("es-AR");
+  }
+
+  const pSel = document.getElementById("panelEstado");
+  ESTADOS.forEach(e => {
+    const o = document.createElement("option");
+    o.value = e; o.textContent = e; pSel.appendChild(o);
+  });
+
+  // Paint default-on toggles
+  syncToggleUI();
+}
+
+// ===== PRICE INPUT FORMATTING =====
+function parsePriceInput(val) {
+  const n = parseInt((val || "").replace(/\D/g, ""), 10);
+  return isNaN(n) ? null : n;
+}
+function formatPriceInput(el) {
+  const pos = el.selectionStart;
+  const oldLen = el.value.length;
+  const raw = el.value.replace(/\D/g, "");
+  if (!raw) { el.value = ""; return; }
+  el.value = parseInt(raw, 10).toLocaleString("es-AR");
+  const newLen = el.value.length;
+  el.setSelectionRange(pos + (newLen - oldLen), pos + (newLen - oldLen));
+}
+
+// ===== FILTER + SORT =====
+function applyFilters() {
+  const barrio          = document.getElementById("filterBarrio").value;
+  const estado          = document.getElementById("filterEstado").value;
+  const soloNuevos      = document.getElementById("filterNuevos").checked;
+  const soloBaja        = document.getElementById("filterBaja").checked;
+  const mostrarExcluidas = document.getElementById("filterExcluidas").checked;
+  const precioMin  = parsePriceInput(document.getElementById("precioMin").value);
+  const precioMax  = parsePriceInput(document.getElementById("precioMax").value);
+  const pm2Min     = parsePriceInput(document.getElementById("pm2Min").value);
+  const pm2Max     = parsePriceInput(document.getElementById("pm2Max").value);
+  const tiposSel   = toggleState.tipo.size > 0 ? toggleState.tipo : null;
+  const opsSel     = toggleState.op.size   > 0 ? toggleState.op   : null;
+
+  filtered = data.filter(d => {
+    if (!mostrarExcluidas && d.excluida) return false;
+    if (barrio    && d.barrio_simple !== barrio) return false;
+    if (estado    && d.estado !== estado) return false;
+    if (soloNuevos && !d.es_nuevo) return false;
+    if (soloBaja   && !d.bajo_precio) return false;
+    if (precioMin !== null && d.precio < precioMin) return false;
+    if (precioMax !== null && d.precio > precioMax) return false;
+    if (pm2Min    !== null && d.precio_m2_tasable < pm2Min) return false;
+    if (pm2Max    !== null && d.precio_m2_tasable > pm2Max) return false;
+    if (tiposSel) {
+      const esOtro = !TIPOS_CONOCIDOS.has(d.tipo_propiedad);
+      if (!tiposSel.has(d.tipo_propiedad) && !(tiposSel.has("Otro") && esOtro)) return false;
+    }
+    if (opsSel && !opsSel.has(d.tipo_operacion)) return false;
+    return true;
+  });
+
+  applySort();
+  applyTopN();
+  render();
+  updateFilterCount();
+}
+
+function applyTopN() {
+  const raw = document.getElementById("topN").value.replace(/\D/g, "");
+  if (!raw) return;
+  const n = parseInt(raw, 10);
+  if (!n || n <= 0) return;
+  const counts = {};
+  filtered = filtered.filter(d => {
+    if (isSospechoso(d)) return false;
+    const b = d.barrio_simple;
+    counts[b] = (counts[b] || 0) + 1;
+    return counts[b] <= n;
+  });
+}
+
+function applySort() {
+  filtered.sort((a, b) => {
+    const key = COLUMNS.find(c => (c.sortKey || c.key) === sortCol) ? sortCol : "orden_barrio";
+    let va = a[key], vb = b[key];
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    if (va < vb) return -1 * sortDir;
+    if (va > vb) return  1 * sortDir;
+    const sa = isSospechoso(a) ? 1 : 0;
+    const sb = isSospechoso(b) ? 1 : 0;
+    if (sa !== sb) return sa - sb;
+    if (key !== "precio_m2_tasable") return a.precio_m2_tasable - b.precio_m2_tasable;
+    return 0;
+  });
+}
+
+// ===== RENDER TABLE =====
+function buildHead() {
+  const tr = document.getElementById("tableHead");
+  tr.innerHTML = "";
+  COLUMNS.forEach(col => {
+    const th = document.createElement("th");
+    if (col.noSort) {
+      th.textContent = col.label;
+      th.style.cursor = "default";
+    } else {
+      const sk = col.sortKey || col.key;
+      const isSorted = sortCol === sk;
+      if (isSorted) th.classList.add("sorted");
+      const arrow = isSorted ? (sortDir === 1 ? "\u25B2" : "\u25BC") : "\u25B4";
+      th.innerHTML = col.label + ' <span class="sort-arrow">' + arrow + "</span>";
+      th.addEventListener("click", () => {
+        if (sortCol === sk) sortDir *= -1;
+        else { sortCol = sk; sortDir = 1; }
+        applySort(); render();
+      });
+    }
+    tr.appendChild(th);
+  });
+}
+
+function renderTableBody() {
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+  filtered.forEach(d => {
+    const tr = document.createElement("tr");
+    if (d.id === activeId) tr.classList.add("active");
+    if (d.excluida) tr.classList.add("row-excluida");
+    tr.addEventListener("click", () => openPanel(d.id));
+    COLUMNS.forEach(col => {
+      const td = document.createElement("td");
+      if (col.key === "tipo_propiedad") {
+        td.classList.add("col-tipo");
+        td.textContent = TIPO_ABREV[d.tipo_propiedad] || d.tipo_propiedad || "-";
+        td.title = d.tipo_propiedad || "";
+      } else if (col.key === "tipo_operacion") {
+        td.classList.add("col-op");
+        const op = d.tipo_operacion;
+        td.textContent = op === "Alquiler Temporario" ? "Temp." : (op || "-");
+        td.title = op || "";
+      } else if (col.key === "barrio_simple") {
+        let html = '<div style="font-weight:600">' + esc(d.barrio_simple) + "</div>";
+        if (d.es_nuevo) html += '<span class="badge badge-nuevo">NUEVO</span>';
+        if (d.bajo_precio) {
+          const tip = d.precio_anterior ? "Antes: " + fmtUSD(d.precio_anterior) : "";
+          html += '<span class="badge badge-baja" title="' + tip + '">\u2193 precio</span>';
+        }
+        td.innerHTML = html;
+      } else if (col.key === "ver") {
+        td.classList.add("col-ver");
+        td.innerHTML = '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" title="Ver en ZonaProp" onclick="event.stopPropagation()">\u2197</a>';
+      } else if (col.key === "precio_m2_tasable") {
+        td.classList.add("col-precio-m2");
+        if (isSospechoso(d)) {
+          td.innerHTML = fmtUSD(d.precio_m2_tasable) + ' <span class="badge badge-sospechoso" title="USD/m\u00b2 < 800">\u26A0 precio?</span>';
+        } else {
+          td.textContent = fmtUSD(d.precio_m2_tasable);
+        }
+      } else if (col.key === "precio") {
+        td.textContent = fmtUSD(d.precio);
+      } else if (col.numeric) {
+        td.textContent = fmtNum(d[col.key]) + " m\u00b2";
+      } else if (col.key === "estado") {
+        const cls = ESTADO_CLASS[d.estado] || "";
+        td.innerHTML = '<span class="estado-badge ' + cls + '">' + esc(d.estado) + "</span>";
+      } else if (col.key === "nota") {
+        td.classList.add("col-nota");
+        td.textContent = d.nota || "-";
+        td.title = d.nota || "";
+      } else {
+        td.textContent = d[col.key] || "-";
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ===== RENDER MOBILE CARDS =====
+function renderCards() {
+  const wrapper = document.getElementById("cardsWrapper");
+  wrapper.innerHTML = "";
+  filtered.forEach(d => {
+    const card = document.createElement("div");
+    card.className = "prop-card" + (d.id === activeId ? " active" : "") + (d.excluida ? " card-excluida" : "");
+    card.addEventListener("click", () => openPanel(d.id));
+
+    const tipo     = TIPO_ABREV[d.tipo_propiedad] || d.tipo_propiedad || "";
+    const op       = d.tipo_operacion === "Alquiler Temporario" ? "Temp." : (d.tipo_operacion || "");
+    const estadoCls = ESTADO_CLASS[d.estado] || "";
+    const nota     = (d.nota || "").substring(0, 55);
+    const sosp     = isSospechoso(d);
+
+    card.innerHTML =
+      '<div class="pc-top">' +
+        '<span class="pc-barrio">' + esc(d.barrio_simple) + '</span>' +
+        '<div class="pc-tags">' +
+          (tipo ? '<span class="pc-tag">' + esc(tipo) + '</span>' : '') +
+          (op   ? '<span class="pc-tag pc-tag-op">' + esc(op) + '</span>' : '') +
+          (d.es_nuevo    ? '<span class="badge badge-nuevo">NUEVO</span>' : '') +
+          (d.bajo_precio ? '<span class="badge badge-baja">\u2193 precio</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="pc-pm2">' +
+        (sosp ? '<span style="color:#94a3b8">' : '') +
+        fmtUSD(d.precio_m2_tasable) +
+        (sosp ? '</span>' : '') +
+        '<span class="pc-pm2-unit"> USD/m\u00b2</span>' +
+        (sosp ? ' <span class="badge badge-sospechoso" title="precio sospechoso">\u26A0</span>' : '') +
+      '</div>' +
+      '<div class="pc-row2">' +
+        '<span>' + fmtUSD(d.precio) + '</span>' +
+        (d.m2_totales   ? '<span>' + fmtNum(d.m2_totales)   + ' m\u00b2 tot</span>' : '') +
+        (d.m2_cubiertos ? '<span>' + fmtNum(d.m2_cubiertos) + ' m\u00b2 cub</span>' : '') +
+      '</div>' +
+      '<div class="pc-row3">' + esc(d.direccion || "-") + (d.antiguedad && d.antiguedad !== "-" ? ' \u00b7 ' + esc(d.antiguedad) : '') + '</div>' +
+      '<div class="pc-row4">' +
+        '<span class="estado-badge ' + estadoCls + '">' + esc(d.estado) + '</span>' +
+        (nota ? '<span class="pc-nota">' + esc(nota) + (d.nota.length > 55 ? '\u2026' : '') + '</span>' : '') +
+      '</div>';
+
+    wrapper.appendChild(card);
+  });
+}
+
+function render() {
+  buildHead();
+  renderTableBody();
+  renderCards();
+  document.getElementById("counter").textContent =
+    "Mostrando " + filtered.length + " de " + data.length + " propiedades";
+}
+
+// ===== PANEL =====
+function openPanel(id) {
+  activeId = id;
+  const d = data.find(x => x.id === id);
+  if (!d) return;
+
+  document.getElementById("panelBarrio").textContent = d.barrio_simple;
+  document.getElementById("panelSub").textContent =
+    d.direccion + "  \u00b7  " + (d.antiguedad || "-");
+
+  const pc = document.getElementById("panelPriceChange");
+  if (d.bajo_precio && d.precio_anterior) {
+    pc.style.display = "block";
+    document.getElementById("panelOldPrice").textContent = fmtUSD(d.precio_anterior);
+    document.getElementById("panelNewPrice").textContent = fmtUSD(d.precio);
+  } else {
+    pc.style.display = "none";
+  }
+
+  document.getElementById("panelWarning").style.display = isSospechoso(d) ? "block" : "none";
+
+  const cards = [
+    { label:"Precio",          value: fmtUSD(d.precio),           highlight: false },
+    { label:"USD/m\u00b2 tas", value: fmtUSD(d.precio_m2_tasable),highlight: true },
+    { label:"m\u00b2 totales", value: d.m2_totales + " m\u00b2",  highlight: false },
+    { label:"m\u00b2 cub.",    value: d.m2_cubiertos + " m\u00b2",highlight: false },
+    { label:"m\u00b2 desc.",   value: d.m2_descubiertos + " m\u00b2", highlight: false },
+    { label:"m\u00b2 tas.",    value: d.m2_tasables + " m\u00b2", highlight: false },
+  ];
+  const cg = document.getElementById("panelCards");
+  cg.innerHTML = "";
+  cards.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "card" + (c.highlight ? " card-highlight" : "");
+    div.innerHTML = '<div class="card-value">' + c.value + '</div><div class="card-label">' + c.label + "</div>";
+    cg.appendChild(div);
+  });
+
+  document.getElementById("panelLink").href = d.url;
+  document.getElementById("panelEstado").value = d.estado;
+  document.getElementById("panelNota").value   = d.nota;
+
+  const btnExcluir = document.getElementById("btnExcluir");
+  if (d.excluida) {
+    btnExcluir.textContent = "✓ Reincluir propiedad";
+    btnExcluir.className = "btn-excluir reincluir";
+  } else {
+    btnExcluir.textContent = "🚫 Excluir — es inmobiliaria";
+    btnExcluir.className = "btn-excluir";
+  }
+
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("panel").classList.add("open");
+  document.body.style.overflow = "hidden";
+  render();
+}
+
+function closePanel() {
+  activeId = null;
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("panel").classList.remove("open");
+  document.body.style.overflow = "";
+  render();
+}
+
+// ===== EVENTS =====
+document.getElementById("panelClose").addEventListener("click", closePanel);
+document.getElementById("overlay").addEventListener("click", closePanel);
+
+document.getElementById("panelEstado").addEventListener("change", function() {
+  if (!activeId) return;
+  const d = data.find(x => x.id === activeId);
+  if (d) { d.estado = this.value; render(); guardarCambio(activeId, "estado", this.value); }
+});
+
+document.getElementById("panelNota").addEventListener("blur", function() {
+  if (!activeId) return;
+  const d = data.find(x => x.id === activeId);
+  if (d) { d.nota = this.value; render(); guardarCambio(activeId, "nota", this.value); }
+});
+
+// Excluir / reincluir
+document.getElementById("btnExcluir").addEventListener("click", async function() {
+  const d = data.find(x => x.id === activeId);
+  if (!d) return;
+  if (!d.excluida) {
+    if (!confirm("¿Excluir esta propiedad? No aparecerá más en el listado.")) return;
+    d.excluida = true;
+    guardarCambio(activeId, "excluida", "TRUE");
+    closePanel();
+  } else {
+    d.excluida = false;
+    guardarCambio(activeId, "excluida", "FALSE");
+    openPanel(activeId);
+  }
+  applyFilters();
+});
+
+// Standard filters
+["filterBarrio","filterEstado"].forEach(id => {
+  document.getElementById(id).addEventListener("change", applyFilters);
+});
+["filterNuevos","filterBaja","filterExcluidas"].forEach(id => {
+  document.getElementById(id).addEventListener("change", applyFilters);
+});
+["precioMin","precioMax","pm2Min","pm2Max"].forEach(id => {
+  document.getElementById(id).addEventListener("input", function() { formatPriceInput(this); applyFilters(); });
+});
+document.getElementById("topN").addEventListener("input", function() {
+  this.value = this.value.replace(/\D/g, "");
+  applyFilters();
+});
+
+// ===== BOOT =====
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('SW registrado:', reg.scope))
+      .catch(err => console.log('SW error:', err));
+  });
+}
+</script>
+</body>
+</html>

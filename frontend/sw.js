@@ -1,0 +1,28 @@
+const CACHE_NAME = 'captacion-v1';
+const STATIC_ASSETS = ['/', '/index.html'];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  // No cachear llamadas al Apps Script ni a Firebase
+  if (event.request.url.includes('script.google.com')) return;
+  if (event.request.url.includes('firebase')) return;
+
+  event.respondWith(
+    caches.match(event.request).then(cached => cached || fetch(event.request))
+  );
+});

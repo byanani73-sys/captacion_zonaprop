@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv venv)",
+      "Bash(where python3:*)",
+      "Bash(where py:*)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Read(//c/Users/usuario/AppData/Local/Programs/**)",
+      "Bash(py --version)",
+      "Bash(py -3 --version)",
+      "Bash(ls /c/Python*)",
+      "Bash(command -v conda)",
+      "Bash(cmd.exe /c \"where python\")",
+      "Bash(curl -L -o /tmp/python-installer.exe \"https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe\")",
+      "Bash(cmd.exe /c \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Temp\\\\python-installer.exe /quiet InstallAllUsers=0 PrependPath=1 Include_test=0\")",
+      "Bash(export PATH=\"/c/Users/usuario/AppData/Local/Programs/Python/Python312:/c/Users/usuario/AppData/Local/Programs/Python/Python312/Scripts:$PATH\")",
+      "Bash(cmd.exe /c \"winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements\")",
+      "Bash(cmd.exe /c \"winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements 2>&1\")",
+      "Bash(powershell.exe -Command \"winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements\")",
+      "Bash(PYTHON=\"/c/Users/usuario/AppData/Local/Programs/Python/Python312/python.exe\")",
+      "Bash(\"$PYTHON\" -m venv venv)",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(pip install:*)",
+      "Bash(playwright install:*)",
+      "Bash(python inspect_zonaprop.py)",
+      "Bash(python -c \":*)",
+      "Bash(rm -f data/zonaprop.db)",
+      "Bash(PYTHONUNBUFFERED=1 python -u -c \":*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(PYTHONIOENCODING=utf-8 \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -u pipeline/migrar_a_sheets.py)",
+      "Bash(\"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m pip install gspread google-auth)",
+      "Bash(PYTHONIOENCODING=utf-8 \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -u -c \":*)",
+      "Bash(python pipeline/limpiar_cocheras.py)",
+      "Bash(venv/bin/python pipeline/limpiar_cocheras.py)"
+    ]
+  }
+}

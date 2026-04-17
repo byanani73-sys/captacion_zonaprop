@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico - Captación ZonaProp</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=DM+Sans:wght@400;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 32px; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; color: #fff; }
+  .subtitle { color: #64748b; font-size: .9rem; margin-bottom: 32px; }
+  .test-card {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    transition: border-color .3s;
+  }
+  .test-card.pass { border-color: #22c55e; }
+  .test-card.fail { border-color: #ef4444; }
+  .test-card.running { border-color: #f59e0b; }
+  .test-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .test-title { font-weight: 700; font-size: 1rem; }
+  .test-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .78rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+  .status-pending { background: #1e293b; color: #64748b; }
+  .status-running { background: #422006; color: #f59e0b; }
+  .status-pass { background: #052e16; color: #22c55e; }
+  .status-fail { background: #450a0a; color: #ef4444; }
+  .test-desc { color: #94a3b8; font-size: .85rem; margin-bottom: 12px; }
+  .test-log {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .78rem;
+    background: #0d0f14;
+    border: 1px solid #1e2130;
+    border-radius: 8px;
+    padding: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    color: #94a3b8;
+    line-height: 1.6;
+  }
+  .test-log .ok { color: #22c55e; }
+  .test-log .err { color: #ef4444; }
+  .test-log .warn { color: #f59e0b; }
+  .test-log .info { color: #60a5fa; }
+  button.run-btn {
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: .95rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    margin-bottom: 32px;
+    transition: background .2s;
+  }
+  button.run-btn:hover { background: #2563eb; }
+  button.run-btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+  .input-group {
+    margin-bottom: 16px;
+  }
+  .input-group label {
+    display: block;
+    font-size: .8rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .input-group input {
+    width: 100%;
+    padding: 10px 14px;
+    background: #0d0f14;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .85rem;
+  }
+  .input-group input:focus { outline: none; border-color: #3b82f6; }
+  .config-section {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .config-title { font-weight: 700; margin-bottom: 16px; color: #fff; }
+</style>
+</head>
+<body>
+
+<h1>Diagnóstico de Captación ZonaProp</h1>
+<p class="subtitle">Esta página prueba cada componente por separado para encontrar exactamente dónde falla.</p>
+
+<div class="config-section">
+  <div class="config-title">Configuración</div>
+  <div class="input-group">
+    <label>URL del Apps Script (termina en /exec)</label>
+    <input type="text" id="inputAppsScript" value="https://script.google.com/macros/s/AKfycbxI6sV0IAssNO4u0IAssNO4u0yUzgvw8aLXWhxp5yGT9zIaWMHWmcEpIvaLoOAprFVTkM4yQbu12wg/exec">
+  </div>
+</div>
+
+<button class="run-btn" id="btnRun" onclick="runAllTests()">Correr diagnóstico</button>
+
+<!-- TEST 1: Firebase Init -->
+<div class="test-card" id="card1">
+  <div class="test-header">
+    <span class="test-title">1. Firebase – Inicialización</span>
+    <span class="test-status status-pending" id="status1">PENDIENTE</span>
+  </div>
+  <div class="test-desc">¿Firebase se carga y se inicializa correctamente?</div>
+  <div class="test-log" id="log1"></div>
+</div>
+
+<!-- TEST 2: Firebase Auth -->
+<div class="test-card" id="card2">
+  <div class="test-header">
+    <span class="test-title">2. Firebase – Login con Google</span>
+    <span class="test-status status-pending" id="status2">PENDIENTE</span>
+  </div>
+  <div class="test-desc">¿El popup de Google funciona y devuelve un usuario autenticado?</div>
+  <div class="test-log" id="log2"></div>
+</div>
+
+<!-- TEST 3: Firebase Token -->
+<div class="test-card" id="card3">
+  <div class="test-header">
+    <span class="test-title">3. Firebase – Obtener Token</span>
+    <span class="test-status status-pending" id="status3">PENDIENTE</span>
+  </div>
+  <div class="test-desc">¿Se puede obtener un ID token válido para enviar al Apps Script?</div>
+  <div class="test-log" id="log3"></div>
+</div>
+
+<!-- TEST 4: Apps Script URL reachable -->
+<div class="test-card" id="card4">
+  <div class="test-header">
+    <span class="test-title">4. Apps Script – URL accesible (sin token)</span>
+    <span class="test-status status-pending" id="status4">PENDIENTE</span>
+  </div>
+  <div class="test-desc">¿La URL del Apps Script responde? Probamos sin token para ver si al menos contesta.</div>
+  <div class="test-log" id="log4"></div>
+</div>
+
+<!-- TEST 5: Apps Script with token -->
+<div class="test-card" id="card5">
+  <div class="test-header">
+    <span class="test-title">5. Apps Script – Lectura con token</span>
+    <span class="test-status status-pending" id="status5">PENDIENTE</span>
+  </div>
+  <div class="test-desc">¿El Apps Script acepta el token y devuelve datos del Sheet?</div>
+  <div class="test-log" id="log5"></div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAe0TL0tnYzxJvAfETbQ2oXIsWhpVIVPWA",
+  authDomain: "captacion-zonaprop-4b56a.firebaseapp.com",
+  projectId: "captacion-zonaprop-4b56a",
+  storageBucket: "captacion-zonaprop-4b56a.firebasestorage.app",
+  messagingSenderId: "1020081308705",
+  appId: "1:1020081308705:web:bdfd9fd90c3d6f2ff5cf60"
+};
+
+let currentUser = null;
+let idToken = null;
+
+function log(testNum, msg, type) {
+  const el = document.getElementById("log" + testNum);
+  const span = document.createElement("span");
+  span.className = type || "";
+  span.textContent = msg + "\n";
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(testNum, status) {
+  const statusEl = document.getElementById("status" + testNum);
+  const cardEl = document.getElementById("card" + testNum);
+  statusEl.className = "test-status status-" + status;
+  statusEl.textContent = status === "pass" ? "OK" : status === "fail" ? "FALLÓ" : status === "running" ? "CORRIENDO..." : "PENDIENTE";
+  cardEl.className = "test-card " + (status === "pass" ? "pass" : status === "fail" ? "fail" : status === "running" ? "running" : "");
+}
+
+async function test1_firebaseInit() {
+  setStatus(1, "running");
+  try {
+    log(1, "Verificando si Firebase SDK se cargó...", "info");
+    if (typeof firebase === "undefined") {
+      log(1, "ERROR: firebase no está definido. El SDK no se cargó.", "err");
+      log(1, "Posible causa: bloqueador de ads/scripts, o sin conexión a internet.", "err");
+      setStatus(1, "fail");
+      return false;
+    }
+    log(1, "Firebase SDK cargado ✓", "ok");
+
+    log(1, "Inicializando Firebase con config...", "info");
+    log(1, "  projectId: " + firebaseConfig.projectId, "info");
+    log(1, "  authDomain: " + firebaseConfig.authDomain, "info");
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    log(1, "Firebase inicializado correctamente ✓", "ok");
+
+    const auth = firebase.auth();
+    log(1, "firebase.auth() disponible ✓", "ok");
+
+    setStatus(1, "pass");
+    return true;
+  } catch (err) {
+    log(1, "ERROR: " + err.message, "err");
+    setStatus(1, "fail");
+    return false;
+  }
+}
+
+async function test2_firebaseLogin() {
+  setStatus(2, "running");
+  try {
+    const auth = firebase.auth();
+
+    // Check if already logged in
+    if (auth.currentUser) {
+      log(2, "Ya hay un usuario logueado: " + auth.currentUser.email, "ok");
+      currentUser = auth.currentUser;
+      setStatus(2, "pass");
+      return true;
+    }
+
+    log(2, "No hay usuario logueado. Abriendo popup de Google...", "info");
+    log(2, "(Si el popup no aparece, revisá el bloqueador de popups del browser)", "warn");
+
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const result = await auth.signInWithPopup(provider);
+    currentUser = result.user;
+
+    log(2, "Login exitoso ✓", "ok");
+    log(2, "  Email: " + currentUser.email, "ok");
+    log(2, "  UID: " + currentUser.uid, "ok");
+    log(2, "  Display name: " + currentUser.displayName, "ok");
+
+    setStatus(2, "pass");
+    return true;
+  } catch (err) {
+    log(2, "ERROR: " + err.code + " - " + err.message, "err");
+    if (err.code === "auth/popup-closed-by-user") {
+      log(2, "Cerraste el popup. Volvé a correr el diagnóstico.", "warn");
+    } else if (err.code === "auth/popup-blocked") {
+      log(2, "El browser bloqueó el popup. Habilitá los popups para este sitio.", "warn");
+    } else if (err.code === "auth/unauthorized-domain") {
+      log(2, "PROBLEMA ENCONTRADO: Este dominio no está autorizado en Firebase.", "err");
+      log(2, "Solución: Ir a Firebase Console → Authentication → Settings → Authorized domains", "warn");
+      log(2, "y agregar el dominio desde donde estás abriendo esta página.", "warn");
+      log(2, "Si estás abriendo desde un archivo local (file://), eso NO funciona con Firebase Auth.", "err");
+      log(2, "Tenés que usar un servidor local: npx serve . o python3 -m http.server", "warn");
+    }
+    setStatus(2, "fail");
+    return false;
+  }
+}
+
+async function test3_getToken() {
+  setStatus(3, "running");
+  try {
+    if (!currentUser) {
+      log(3, "No hay usuario logueado (test 2 falló)", "err");
+      setStatus(3, "fail");
+      return false;
+    }
+
+    log(3, "Obteniendo ID token...", "info");
+    idToken = await currentUser.getIdToken(true);
+
+    log(3, "Token obtenido ✓", "ok");
+    log(3, "  Longitud: " + idToken.length + " caracteres", "info");
+    log(3, "  Primeros 50 chars: " + idToken.substring(0, 50) + "...", "info");
+
+    // Decode JWT payload to check expiry
+    try {
+      const payload = JSON.parse(atob(idToken.split(".")[1]));
+      const exp = new Date(payload.exp * 1000);
+      log(3, "  Expira: " + exp.toLocaleString(), "info");
+      log(3, "  Email en token: " + payload.email, "info");
+    } catch(e) {
+      log(3, "  (No se pudo decodificar el payload del JWT)", "warn");
+    }
+
+    setStatus(3, "pass");
+    return true;
+  } catch (err) {
+    log(3, "ERROR obteniendo token: " + err.message, "err");
+    setStatus(3, "fail");
+    return false;
+  }
+}
+
+async function test4_appsScriptNoToken() {
+  setStatus(4, "running");
+  const url = document.getElementById("inputAppsScript").value.trim();
+
+  if (!url || !url.includes("/exec")) {
+    log(4, "ERROR: La URL no parece válida. Debe terminar en /exec", "err");
+    setStatus(4, "fail");
+    return false;
+  }
+
+  log(4, "URL: " + url, "info");
+  log(4, "Intentando fetch sin token (esperamos respuesta de error controlado)...", "info");
+
+  try {
+    const testUrl = url + "?action=leer";
+    log(4, "GET " + testUrl, "info");
+
+    const response = await fetch(testUrl, { redirect: "follow" });
+    log(4, "Respuesta recibida ✓", "ok");
+    log(4, "  Status: " + response.status, "info");
+    log(4, "  URL final (después de redirects): " + response.url, "info");
+    log(4, "  Content-Type: " + response.headers.get("content-type"), "info");
+
+    const text = await response.text();
+    log(4, "  Body: " + text.substring(0, 300), "info");
+
+    try {
+      const json = JSON.parse(text);
+      if (json.error === "No autorizado") {
+        log(4, "Apps Script respondió 'No autorizado' — esto es CORRECTO.", "ok");
+        log(4, "La URL funciona y la verificación de token está activa ✓", "ok");
+      } else if (json.propiedades) {
+        log(4, "Apps Script devolvió datos SIN token — la verificación de token no está funcionando.", "warn");
+        log(4, "Esto no es un error grave, pero significa que cualquiera puede leer los datos.", "warn");
+      } else {
+        log(4, "Respuesta JSON inesperada: " + JSON.stringify(json).substring(0, 200), "warn");
+      }
+    } catch(e) {
+      log(4, "La respuesta NO es JSON válido.", "err");
+      log(4, "Esto puede indicar que el Apps Script no está deployado como Web App,", "err");
+      log(4, "o que la URL es incorrecta, o que devolvió una página HTML de error.", "err");
+      if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+        log(4, "Parece que devolvió HTML (posible página de error de Google).", "err");
+      }
+    }
+
+    setStatus(4, "pass");
+    return true;
+
+  } catch (err) {
+    log(4, "ERROR: " + err.name + " - " + err.message, "err");
+    log(4, "", "");
+    log(4, "=== DIAGNÓSTICO DEL FAILED TO FETCH ===", "err");
+    log(4, "", "");
+
+    if (err.message === "Failed to fetch" || err.name === "TypeError") {
+      log(4, "Causas posibles:", "warn");
+      log(4, "", "");
+      log(4, "1. URL INCORRECTA: Verificá que la URL sea la del deploy, no la del editor.", "warn");
+      log(4, "   - Debe ser: https://script.google.com/macros/s/XXXXX/exec", "warn");
+      log(4, "   - Para encontrarla: Apps Script → Deploy → Manage deployments → copiar URL", "warn");
+      log(4, "", "");
+      log(4, "2. DEPLOY NO HECHO O VIEJO: Cada vez que cambiás el código del Apps Script,", "warn");
+      log(4, "   necesitás hacer un NUEVO deploy (Deploy → New deployment).", "warn");
+      log(4, "   Solo guardar el código NO actualiza el deploy.", "warn");
+      log(4, "", "");
+      log(4, "3. ACCESO INCORRECTO: El deploy debe tener:", "warn");
+      log(4, '   - Execute as: "Me"', "warn");
+      log(4, '   - Who has access: "Anyone" (NO "Anyone with Google account")', "warn");
+      log(4, "", "");
+      log(4, "4. BLOQUEADOR DE ADS/SCRIPTS: Extensiones como uBlock, Privacy Badger, etc.", "warn");
+      log(4, "   pueden bloquear requests a script.google.com", "warn");
+      log(4, "", "");
+      log(4, "5. CORS / REDIRECT ISSUE: Google Apps Script hace un redirect 302.", "warn");
+      log(4, "   Si el fetch no sigue el redirect correctamente, falla.", "warn");
+    }
+
+    setStatus(4, "fail");
+    return false;
+  }
+}
+
+async function test5_appsScriptWithToken() {
+  setStatus(5, "running");
+
+  if (!idToken) {
+    log(5, "No hay token disponible (tests 2 o 3 fallaron)", "err");
+    setStatus(5, "fail");
+    return false;
+  }
+
+  const url = document.getElementById("inputAppsScript").value.trim();
+  log(5, "Intentando lectura con token válido...", "info");
+
+  try {
+    const fullUrl = url + "?action=leer&token=" + encodeURIComponent(idToken);
+    log(5, "GET " + url + "?action=leer&token=[TOKEN_" + idToken.length + "_CHARS]", "info");
+
+    const response = await fetch(fullUrl, { redirect: "follow" });
+    log(5, "Respuesta recibida ✓", "ok");
+    log(5, "  Status: " + response.status, "info");
+
+    const text = await response.text();
+
+    try {
+      const json = JSON.parse(text);
+
+      if (json.error) {
+        log(5, "Apps Script respondió con error: " + json.error, "err");
+        if (json.error === "No autorizado") {
+          log(5, "", "");
+          log(5, "El token fue rechazado. Causas posibles:", "warn");
+          log(5, "1. El email " + (currentUser?.email || "desconocido") + " no está en EMAILS_AUTORIZADOS", "warn");
+          log(5, "2. La API Key en el verificarToken del Apps Script es incorrecta", "warn");
+          log(5, "3. El token expiró entre los tests", "warn");
+        }
+        setStatus(5, "fail");
+        return false;
+      }
+
+      if (json.propiedades) {
+        log(5, "DATOS RECIBIDOS ✓", "ok");
+        log(5, "  Total propiedades: " + json.propiedades.length, "ok");
+        if (json.propiedades.length > 0) {
+          const first = json.propiedades[0];
+          const keys = Object.keys(first);
+          log(5, "  Columnas: " + keys.join(", "), "info");
+          log(5, "  Primera fila: " + JSON.stringify(first).substring(0, 200) + "...", "info");
+        }
+        setStatus(5, "pass");
+        return true;
+      }
+
+      log(5, "Respuesta inesperada: " + text.substring(0, 300), "warn");
+      setStatus(5, "fail");
+      return false;
+
+    } catch(e) {
+      log(5, "La respuesta NO es JSON válido:", "err");
+      log(5, text.substring(0, 300), "err");
+      setStatus(5, "fail");
+      return false;
+    }
+
+  } catch (err) {
+    log(5, "ERROR: " + err.name + " - " + err.message, "err");
+    log(5, "(Mismas causas posibles que test 4)", "warn");
+    setStatus(5, "fail");
+    return false;
+  }
+}
+
+async function runAllTests() {
+  const btn = document.getElementById("btnRun");
+  btn.disabled = true;
+  btn.textContent = "Corriendo...";
+
+  // Clear all logs
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById("log" + i).innerHTML = "";
+    setStatus(i, "pending");
+  }
+
+  const ok1 = await test1_firebaseInit();
+  if (!ok1) { btn.disabled = false; btn.textContent = "Correr diagnóstico"; return; }
+
+  const ok2 = await test2_firebaseLogin();
+  if (!ok2) {
+    // Still try test 4 even without login
+    log(4, "Corriendo sin token (login falló)...", "warn");
+    await test4_appsScriptNoToken();
+    btn.disabled = false; btn.textContent = "Correr diagnóstico"; return;
+  }
+
+  const ok3 = await test3_getToken();
+
+  // Test 4 always runs
+  const ok4 = await test4_appsScriptNoToken();
+
+  // Test 5 only if we have a token and the URL works
+  if (ok3 && ok4) {
+    await test5_appsScriptWithToken();
+  } else if (ok3) {
+    log(5, "Test 4 falló, pero intentamos con token de todas formas...", "warn");
+    await test5_appsScriptWithToken();
+  } else {
+    log(5, "No hay token disponible (test 3 falló)", "err");
+    setStatus(5, "fail");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Correr diagnóstico de nuevo";
+}
+</script>
+</body>
+</html>
