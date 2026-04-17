@@ -1,0 +1,41 @@
+name: Scraper Diario ZonaProp
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 8am Argentina (UTC-3)
+  workflow_dispatch:  # permite correrlo manualmente desde GitHub
+
+jobs:
+  scraper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Crear credentials.json
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
+
+      - name: Crear .env
+        run: |
+          echo "GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}" > .env
+          echo "GOOGLE_CREDENTIALS_PATH=credentials.json" >> .env
+
+      - name: Correr scraper diario
+        run: python scrapers/scraper_diario.py
+
+      - name: Limpiar credentials
+        if: always()
+        run: rm -f credentials.json
