@@ -9,7 +9,7 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>cd /Users/brian/Scraper\ de\ captacion\ inmobiliaria && source venv/bin/activate && python scrapers/scraper_diario.py >> logs/scraper_diario.log 2>&1</string>
+        <string>cd "/Users/brian/Documents/Scraper de captacion inmobiliaria" && "/Users/brian/Documents/Scraper de captacion inmobiliaria/venv/bin/python" scrapers/scraper_diario.py >> "/Users/brian/Library/Logs/scraper_diario.log" 2>&1</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -21,10 +21,10 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/brian/Scraper de captacion inmobiliaria/logs/scraper_diario.log</string>
+    <string>/Users/brian/Library/Logs/scraper_diario.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/brian/Scraper de captacion inmobiliaria/logs/scraper_diario_error.log</string>
+    <string>/Users/brian/Library/Logs/scraper_diario_error.log</string>
 
     <key>RunAtLoad</key>
     <false/>
