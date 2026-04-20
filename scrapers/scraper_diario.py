@@ -478,8 +478,6 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                 print(f"  Página {page_num}: sin tarjetas → fin del listado")
                 break
 
-            ids_antes = len(ids_vistos)
-
             for card in cards:
                 id_zp = card.get("id_zonaprop")
                 if not id_zp:
@@ -502,10 +500,8 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                     nuevos_ids.add(id_zp)
                     nuevos.append(card)
 
-            ids_nuevos_en_pagina = len(ids_vistos) - ids_antes
-
             print(f"  Página {page_num}: {len(cards)} tarjetas | "
-                  f"IDs únicos nuevos: {ids_nuevos_en_pagina} | "
+                  f"Nuevas acumuladas: {len(nuevos_ids)} | "
                   f"Cambios precio: {len(actualizados)} | "
                   f"Vistas total: {len(ids_vistos)}")
 
@@ -517,11 +513,6 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                 ids_procesados.update(c.get("id_zonaprop") for c in nuevos_pagina)
                 insertados.extend(insertados_pagina)
                 print(f"  → {len(insertados_pagina)} nuevas insertadas en DB")
-
-            # Paginación trabada: ZonaProp repite la misma página
-            if ids_nuevos_en_pagina == 0 and page_num > 1:
-                print(f"  [!] Paginación trabada (0 IDs nuevos) → parando")
-                break
 
             if max_paginas and page_num >= max_paginas:
                 print(f"  Límite de páginas alcanzado ({max_paginas})")
