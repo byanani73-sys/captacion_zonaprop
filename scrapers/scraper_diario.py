@@ -527,15 +527,9 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                 print(f"  Límite de páginas alcanzado ({max_paginas})")
                 break
 
-            # Scroll humano y click en "siguiente"
-            await list_page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(random.uniform(1, 2))
-            next_btn = await list_page.query_selector('[data-qa="PAGING_NEXT"]')
-            if not next_btn:
-                print(f"  Página {page_num}: sin botón 'siguiente' → fin")
-                break
-            async with list_page.expect_navigation(wait_until="domcontentloaded"):
-                await next_btn.click()
+            # Navegar directamente a la siguiente página por URL
+            next_url = BASE_URL.replace(".html", f"-pagina-{page_num + 1}.html")
+            await list_page.goto(next_url, wait_until="domcontentloaded")
             await list_page.wait_for_timeout(random.randint(3000, 6000))
             if not await wait_for_cf(list_page):
                 print("  [!] Cloudflare bloqueó la página siguiente")
