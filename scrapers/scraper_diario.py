@@ -49,8 +49,20 @@ from pipeline.mapear_barrios import resolver_barrio
 from pipeline.extraer_tipo_url import parsear_slug
 
 # ---------------------------------------------------------------------------
-# Browser args para entorno headless/CI (menos detectable en Linux)
+# Browser config — misma config que scraper_inicial para local,
+# args reforzados solo en GitHub Actions
 # ---------------------------------------------------------------------------
+LOCAL_BROWSER_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--headless=new",
+]
+LOCAL_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+LOCAL_VIEWPORT = {"width": 1366, "height": 768}
+
 CI_BROWSER_ARGS = [
     "--no-sandbox",
     "--disable-setuid-sandbox",
@@ -66,14 +78,24 @@ CI_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+CI_VIEWPORT = {"width": 1280, "height": 800}
 
 
 async def new_stealth_page_diario(pw):
-    """Browser con args reforzados para CI/headless."""
-    browser = await pw.chromium.launch(headless=True, args=CI_BROWSER_ARGS)
+    """Browser con config adaptada al entorno (local vs CI)."""
+    if USAR_SHEETS_COMO_DB:  # GitHub Actions
+        args = CI_BROWSER_ARGS
+        ua = CI_USER_AGENT
+        vp = CI_VIEWPORT
+    else:  # Local (Mac/Windows)
+        args = LOCAL_BROWSER_ARGS
+        ua = LOCAL_USER_AGENT
+        vp = LOCAL_VIEWPORT
+
+    browser = await pw.chromium.launch(headless=True, args=args)
     context = await browser.new_context(
-        user_agent=CI_USER_AGENT,
-        viewport={"width": 1280, "height": 800},
+        user_agent=ua,
+        viewport=vp,
         locale="es-AR",
     )
     page = await context.new_page()
@@ -419,36 +441,50 @@ def marcar_inactivas_sheets(sh: dict, ids_vistos: set) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Fase 2 — Recorrer listado
+# Fase 2+3 — Recorrer listado y procesar detalles inline
 # ---------------------------------------------------------------------------
-async def recorrer_listado(pw, existentes: dict, max_paginas=None) -> tuple[set, list, list]:
+async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> tuple[set, list, list]:
     """
-    Recorre todas las páginas del listado.
+    Recorre todas las páginas del listado. Para cada página, visita los
+    detalles de las propiedades nuevas e inserta en DB ANTES de avanzar
+    a la siguiente página. Esto genera varios minutos de actividad orgánica
+    entre navegaciones de listado, evitando el bloqueo de Cloudflare.
+
     existentes: {id_zonaprop: precio_actual}
-    Devuelve: ids_vistos, nuevos, actualizados
+    Devuelve: ids_vistos, insertados, actualizados
     """
     ids_vistos   = set()
-    nuevos       = []
+    nuevos_ids   = set()   # deduplicar entre páginas
+    insertados   = []      # acumulado total de rows procesados e insertados
     actualizados = []
 
     list_browser, list_page = await new_stealth_page_diario(pw)
     try:
-        await list_page.goto(BASE_URL, wait_until="domcontentloaded")
-        await list_page.wait_for_timeout(random.randint(8000, 12000))
-        passed = await wait_for_cf(list_page)
-        if not passed:
-            print("  [!] No se pudo superar Cloudflare en el listado")
-            return ids_vistos, nuevos, actualizados
-
-        page_num      = 0
-        total_tarjetas = 0
+        page_num = 0
 
         while True:
             page_num += 1
+
+            # Construir URL: página 1 = base, página N = base-pagina-N.html
+            if page_num == 1:
+                page_url = BASE_URL
+            else:
+                page_url = BASE_URL.replace(".html", f"-pagina-{page_num}.html")
+
+            await list_page.goto(page_url, wait_until="domcontentloaded")
+            await list_page.wait_for_timeout(random.randint(3000, 6000))
+            passed = await wait_for_cf(list_page)
+            if not passed:
+                print(f"  [!] Cloudflare bloqueó página {page_num}")
+                break
+
             cards = await extract_cards(list_page)
             if not cards:
                 print(f"  Página {page_num}: sin tarjetas → fin del listado")
                 break
+
+            ids_antes    = len(ids_vistos)
+            page_nuevos  = []  # solo las nuevas de esta página
 
             for card in cards:
                 id_zp = card.get("id_zonaprop")
@@ -456,49 +492,60 @@ async def recorrer_listado(pw, existentes: dict, max_paginas=None) -> tuple[set,
                     continue
 
                 ids_vistos.add(id_zp)
-                total_tarjetas += 1
 
                 if id_zp in existentes:
                     precio_viejo = existentes[id_zp]
                     precio_nuevo = card.get("precio_actual")
                     if precio_nuevo and precio_viejo and precio_nuevo != precio_viejo:
-                        actualizados.append({
-                            "id":              id_zp,
-                            "precio_nuevo":    precio_nuevo,
-                            "precio_anterior": precio_viejo,
-                            "bajo_precio":     1 if precio_nuevo < precio_viejo else 0,
-                        })
-                else:
-                    nuevos.append(card)
+                        if not any(a["id"] == id_zp for a in actualizados):
+                            actualizados.append({
+                                "id":              id_zp,
+                                "precio_nuevo":    precio_nuevo,
+                                "precio_anterior": precio_viejo,
+                                "bajo_precio":     1 if precio_nuevo < precio_viejo else 0,
+                            })
+                elif id_zp not in nuevos_ids:
+                    nuevos_ids.add(id_zp)
+                    page_nuevos.append(card)
 
-            if total_tarjetas % 10 == 0 or page_num == 1:
-                print(f"  Página {page_num}: {len(cards)} tarjetas | "
-                      f"Nuevas: {len(nuevos)} | Cambios precio: {len(actualizados)} | "
-                      f"Vistas: {len(ids_vistos)}")
+            ids_nuevos_en_pagina = len(ids_vistos) - ids_antes
+
+            print(f"  Página {page_num}: {len(cards)} tarjetas | "
+                  f"Nuevas: {ids_nuevos_en_pagina} | "
+                  f"Cambios precio: {len(actualizados)} | "
+                  f"Vistas total: {len(ids_vistos)}")
+
+            # -------------------------------------------------------------------
+            # Visitar detalles de esta página ANTES de avanzar al siguiente
+            # Esto crea 5-10 min de actividad orgánica entre páginas del listado
+            # -------------------------------------------------------------------
+            if page_nuevos:
+                print(f"  → Detallando {len(page_nuevos)} propiedades nuevas "
+                      f"(total insertadas hasta ahora: {len(insertados)})...")
+                page_rows = await procesar_nuevos(pw, page_nuevos, hoy)
+                insertar_en_db(page_rows)
+                insertados.extend(page_rows)
+
+            # Paginación trabada: ZonaProp repite la misma página
+            if ids_nuevos_en_pagina == 0 and page_num > 1:
+                print(f"  [!] Paginación trabada (0 IDs nuevos) → parando")
+                break
 
             if max_paginas and page_num >= max_paginas:
                 print(f"  Límite de páginas alcanzado ({max_paginas})")
                 break
 
-            next_btn = await list_page.query_selector('[data-qa="PAGING_NEXT"]')
-            if not next_btn:
-                print(f"  Página {page_num}: sin botón 'siguiente' → fin")
-                break
-
+            # Scroll humano antes de avanzar
+            await list_page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await asyncio.sleep(random.uniform(2, 4))
-            await next_btn.click()
-            await list_page.wait_for_load_state("domcontentloaded")
-            if not await wait_for_cf(list_page):
-                print("  [!] Cloudflare bloqueó la página siguiente")
-                break
-            await list_page.wait_for_timeout(2000)
 
-        print(f"\n  Listado recorrido: {page_num} páginas, {total_tarjetas} tarjetas totales")
+        print(f"\n  Listado completo: {page_num} páginas | "
+              f"{len(ids_vistos)} IDs únicos | {len(insertados)} insertados")
 
     finally:
         await list_browser.close()
 
-    return ids_vistos, nuevos, actualizados
+    return ids_vistos, insertados, actualizados
 
 
 # ---------------------------------------------------------------------------
@@ -640,16 +687,14 @@ async def main(max_paginas=None, sin_sheets=False):
         reseteados = resetear_es_nuevo_sheets(sh)
         print(f"      {reseteados} registros reseteados")
 
-        print("\n[2/5] Recorriendo listado de ZonaProp...")
+        print("\n[2/5+3/5] Recorriendo listado y detallando nuevas inline...")
         async with async_playwright() as pw:
-            ids_vistos, nuevos, actualizados = await recorrer_listado(pw, existentes, max_paginas)
+            ids_vistos, insertados, actualizados = await recorrer_listado(
+                pw, existentes, hoy, max_paginas
+            )
 
-            print(f"\n[3/5] Procesando {len(nuevos)} propiedades nuevas...")
-            if nuevos:
-                insertados = await procesar_nuevos(pw, nuevos, hoy)
-            else:
-                insertados = []
-                print("      Sin propiedades nuevas")
+        print(f"\n[3/5] Detalles procesados inline durante el escaneo del listado")
+        print(f"      {len(insertados)} propiedades nuevas procesadas")
 
         print(f"\n[4/5] Actualizando precios en Sheets...")
         if actualizados:
@@ -694,17 +739,14 @@ async def main(max_paginas=None, sin_sheets=False):
         existentes = get_existing_ids_db(conn)
         conn.close()
 
-        print("\n[2/5] Recorriendo listado de ZonaProp...")
+        print("\n[2/5+3/5] Recorriendo listado y detallando nuevas inline...")
         async with async_playwright() as pw:
-            ids_vistos, nuevos, actualizados = await recorrer_listado(pw, existentes, max_paginas)
+            ids_vistos, insertados, actualizados = await recorrer_listado(
+                pw, existentes, hoy, max_paginas
+            )
 
-            print(f"\n[3/5] Procesando {len(nuevos)} propiedades nuevas...")
-            if nuevos:
-                insertados = await procesar_nuevos(pw, nuevos, hoy)
-                insertar_en_db(insertados)
-            else:
-                insertados = []
-                print("      Sin propiedades nuevas")
+        print(f"\n[3/5] Detalles procesados inline durante el escaneo del listado")
+        print(f"      {len(insertados)} propiedades nuevas insertadas en DB")
 
         print(f"\n[4/5] Actualizando precios y marcando inactivas...")
         if actualizados:
