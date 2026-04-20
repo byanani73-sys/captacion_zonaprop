@@ -527,13 +527,18 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                 print(f"  Límite de páginas alcanzado ({max_paginas})")
                 break
 
-            # Navegar directamente a la siguiente página por URL
-            next_url = BASE_URL.replace(".html", f"-pagina-{page_num + 1}.html")
-            await list_page.goto(next_url, wait_until="domcontentloaded")
-            await list_page.wait_for_timeout(random.randint(3000, 6000))
+            next_btn = await list_page.query_selector('[data-qa="PAGING_NEXT"]')
+            if not next_btn:
+                print(f"  Página {page_num}: sin botón 'siguiente' → fin")
+                break
+
+            await asyncio.sleep(random.uniform(2, 4))
+            await next_btn.click()
+            await list_page.wait_for_load_state("domcontentloaded")
             if not await wait_for_cf(list_page):
                 print("  [!] Cloudflare bloqueó la página siguiente")
                 break
+            await list_page.wait_for_timeout(2000)
 
         print(f"\n  Listado recorrido: {page_num} páginas | "
               f"{len(ids_vistos)} IDs únicos | {len(insertados)} insertados")
