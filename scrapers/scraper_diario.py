@@ -750,8 +750,9 @@ async def main(max_paginas=None, sin_sheets=False):
         if max_paginas:
             print("      Marcado de inactivas SALTEADO (corrida parcial con --max-paginas)")
             ids_inactivos = []
-        elif len(ids_vistos) == 0:
-            print("  [!] ADVERTENCIA: No se visitó ninguna página — marcado de inactivas CANCELADO")
+        elif len(ids_vistos) < 100:
+            print(f"      [!] Marcado de inactivas CANCELADO: solo se vieron {len(ids_vistos)} IDs.")
+            print(f"      Probablemente el scraper no pudo recorrer el listado completo.")
             ids_inactivos = []
         else:
             ids_inactivos = marcar_inactivas_db(ids_vistos, hoy)
