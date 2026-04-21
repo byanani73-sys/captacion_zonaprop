@@ -3,10 +3,9 @@ scraper_diario.py — Actualización diaria de ZonaProp
 
 Fases:
   1. Resetear es_nuevo
-  2. Recorrer todas las páginas del listado y detectar cambios de precio
-  3. Visitar detalles de propiedades nuevas
-  4. Marcar inactivas las que no aparecieron hoy
-  5. Sincronizar Google Sheets (nuevos, precios, inactivos)
+  2. Recorrer listado (orden fecha desc) y detallar nuevas inline
+  3. Actualizar precios de propiedades existentes
+  4. Sincronizar Google Sheets (nuevos, precios)
 
 Modos:
   - Local (default):       usa SQLite como fuente de verdad, sincroniza Sheets al final
@@ -298,25 +297,6 @@ def actualizar_precios_db(actualizados: list, hoy: str) -> None:
     conn.close()
 
 
-def marcar_inactivas_db(ids_vistos: set, hoy: str) -> list:
-    conn = sqlite3.connect(DB_PATH)
-    ids_activas = {
-        row[0] for row in conn.execute(
-            "SELECT id_zonaprop FROM propiedades WHERE activa = 1"
-        ).fetchall()
-    }
-    ids_inactivas = ids_activas - ids_vistos
-    if ids_inactivas:
-        placeholders = ",".join("?" * len(ids_inactivas))
-        conn.execute(
-            f"UPDATE propiedades SET activa = 0, fecha_actualizacion = ? "
-            f"WHERE id_zonaprop IN ({placeholders})",
-            [hoy] + list(ids_inactivas),
-        )
-        conn.commit()
-    conn.close()
-    return list(ids_inactivas)
-
 
 # ---------------------------------------------------------------------------
 # Sheets helpers (modo GitHub Actions)
@@ -417,32 +397,6 @@ def actualizar_precios_sheets(sh: dict, actualizados: list) -> None:
         print(f"  ✓ {len(actualizados)} precios actualizados ({bajaron} bajaron, {subieron} subieron)")
         time.sleep(1)
 
-
-def marcar_inactivas_sheets(sh: dict, ids_vistos: set) -> list:
-    ws         = sh["ws"]
-    h_idx      = sh["h_idx"]
-    id_to_row  = sh["id_to_row"]
-    existentes = sh["existentes"]
-
-    if "activa" not in h_idx:
-        print("  [!] Columna 'activa' no existe en Sheets")
-        return []
-
-    activa_col    = col_letter(h_idx["activa"])
-    ids_inactivas = set(existentes.keys()) - ids_vistos
-
-    updates = []
-    for id_zp in ids_inactivas:
-        row_num = id_to_row.get(id_zp)
-        if row_num:
-            updates.append({"range": f"{activa_col}{row_num}", "values": [[0]]})
-
-    if updates:
-        ws.batch_update(updates)
-        print(f"  ✓ {len(updates)} registros marcados inactivos en Sheets")
-        time.sleep(1)
-
-    return list(ids_inactivas)
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +504,7 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
     finally:
         await list_browser.close()
 
-    return ids_vistos, insertados, actualizados
+    return ids_vistos, insertados, actualizados, page_num
 
 
 # ---------------------------------------------------------------------------
@@ -631,8 +585,8 @@ async def procesar_nuevos(pw, nuevos: list, hoy: str) -> list:
 # ---------------------------------------------------------------------------
 # Fase 5 — Sincronizar Sheets (modo local: sync incremental al final)
 # ---------------------------------------------------------------------------
-def sincronizar_sheets(insertados: list, actualizados: list, ids_inactivos: list) -> None:
-    if not insertados and not actualizados and not ids_inactivos:
+def sincronizar_sheets(insertados: list, actualizados: list) -> None:
+    if not insertados and not actualizados:
         print("  Nada que sincronizar con Sheets")
         return
 
@@ -649,20 +603,6 @@ def sincronizar_sheets(insertados: list, actualizados: list, ids_inactivos: list
 
     if actualizados:
         actualizar_precios_sheets(sh, actualizados)
-
-    if ids_inactivos:
-        if "activa" in sh["h_idx"]:
-            activa_col = col_letter(sh["h_idx"]["activa"])
-            updates    = []
-            for id_zp in ids_inactivos:
-                row_num = sh["id_to_row"].get(id_zp)
-                if row_num:
-                    updates.append({"range": f"{activa_col}{row_num}", "values": [[0]]})
-            if updates:
-                ws.batch_update(updates)
-                print(f"  ✓ {len(updates)} registros marcados inactivos en Sheets")
-        else:
-            print("  [!] Columna 'activa' no existe en Sheets")
 
 
 # ---------------------------------------------------------------------------
@@ -694,7 +634,7 @@ async def main(max_paginas=None, sin_sheets=False):
 
         print("\n[2/5+3/5] Recorriendo listado y detallando nuevas inline...")
         async with async_playwright() as pw:
-            ids_vistos, insertados, actualizados = await recorrer_listado(
+            ids_vistos, insertados, actualizados, paginas_recorridas = await recorrer_listado(
                 pw, existentes, hoy, max_paginas
             )
 
@@ -706,17 +646,6 @@ async def main(max_paginas=None, sin_sheets=False):
         else:
             print("      Sin cambios de precio")
 
-        print(f"\n[4b]  Marcando inactivas en Sheets...")
-        if max_paginas:
-            print("      SALTEADO (corrida parcial con --max-paginas)")
-            ids_inactivos = []
-        elif len(ids_vistos) == 0:
-            print("  [!] ADVERTENCIA: No se visitó ninguna página — marcado de inactivas CANCELADO")
-            ids_inactivos = []
-        else:
-            ids_inactivos = marcar_inactivas_sheets(sh, ids_vistos)
-            print(f"      {len(ids_inactivos)} propiedades marcadas inactivas")
-
         print(f"\n[5/5] Escribiendo nuevos en Sheets...")
         if insertados:
             escribir_nuevos_en_sheets(sh, insertados)
@@ -724,7 +653,7 @@ async def main(max_paginas=None, sin_sheets=False):
             print("      Sin nuevos para escribir")
 
         total_inicial = len(existentes)
-        total_final   = total_inicial + len(insertados) - len(ids_inactivos)
+        total_final   = total_inicial + len(insertados)
 
     # -----------------------------------------------------------------------
     # Modo local — SQLite como fuente de verdad
@@ -745,13 +674,13 @@ async def main(max_paginas=None, sin_sheets=False):
 
         print("\n[2/5+3/5] Recorriendo listado y detallando nuevas inline...")
         async with async_playwright() as pw:
-            ids_vistos, insertados, actualizados = await recorrer_listado(
+            ids_vistos, insertados, actualizados, paginas_recorridas = await recorrer_listado(
                 pw, existentes, hoy, max_paginas
             )
 
         print(f"\n[3/5] Detalles procesados inline — {len(insertados)} nuevas insertadas en DB")
 
-        print(f"\n[4/5] Actualizando precios y marcando inactivas...")
+        print(f"\n[4/5] Actualizando precios...")
         if actualizados:
             actualizar_precios_db(actualizados, hoy)
             bajaron  = sum(1 for u in actualizados if u["bajo_precio"])
@@ -760,21 +689,10 @@ async def main(max_paginas=None, sin_sheets=False):
         else:
             print("      Sin cambios de precio")
 
-        if max_paginas:
-            print("      Marcado de inactivas SALTEADO (corrida parcial con --max-paginas)")
-            ids_inactivos = []
-        elif len(ids_vistos) < 100:
-            print(f"      [!] Marcado de inactivas CANCELADO: solo se vieron {len(ids_vistos)} IDs.")
-            print(f"      Probablemente el scraper no pudo recorrer el listado completo.")
-            ids_inactivos = []
-        else:
-            ids_inactivos = marcar_inactivas_db(ids_vistos, hoy)
-            print(f"      {len(ids_inactivos)} propiedades marcadas inactivas")
-
         if not sin_sheets:
             print(f"\n[5/5] Sincronizando Google Sheets...")
             try:
-                sincronizar_sheets(insertados, actualizados, ids_inactivos)
+                sincronizar_sheets(insertados, actualizados)
             except Exception as e:
                 print(f"  [!] Error en sync Sheets: {e}")
         else:
@@ -797,11 +715,10 @@ async def main(max_paginas=None, sin_sheets=False):
     print("RESUMEN")
     print(f"{'=' * 65}")
     print(f"  Propiedades (inicio → fin):  {total_inicial} → {total_final}")
-    print(f"  Páginas recorridas:          {max_paginas or 'todas'}")
+    print(f"  Páginas recorridas:          {paginas_recorridas}")
     print(f"  IDs vistos hoy:              {len(ids_vistos)}")
     print(f"  Nuevos insertados:           {len(insertados)}")
     print(f"  Precios actualizados:        {len(actualizados)} ({bajaron} bajaron, {subieron} subieron)")
-    print(f"  Marcados inactivos:          {len(ids_inactivos)}")
     print(f"  Tiempo total:                {mins}m {segs}s")
     print(f"{'=' * 65}\n")
 
