@@ -360,6 +360,33 @@ td.col-ver a:hover { color: #1d4ed8; }
 .estado-interesado    { background: #bbf7d0; color: #166534; }
 .estado-negociando    { background: #bfdbfe; color: #1e40af; }
 .estado-captado       { background: #111827; color: #fff; }
+.estado-desactivada   { background: #ffedd5; color: #c2410c; }
+
+/* ===== MULTI-SELECT DROPDOWN ===== */
+.ms-wrapper { position: relative; }
+.ms-btn {
+  appearance: none; -webkit-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  padding: 7px 30px 7px 12px;
+  font-size: .9rem; font-family: inherit; color: #374151;
+  cursor: pointer; white-space: nowrap; min-width: 130px;
+}
+.ms-btn:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.15); }
+.ms-btn.active { border-color: #1a73e8; color: #1a73e8; font-weight: 600; }
+.ms-dropdown {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0;
+  background: #fff; border: 1px solid #d1d5db; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 200;
+  max-height: 280px; overflow-y: auto; min-width: 210px;
+}
+.ms-dropdown.open { display: block; }
+.ms-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; cursor: pointer; font-size: .9rem; color: #374151;
+}
+.ms-item:hover { background: #f3f4f6; }
+.ms-item input[type="checkbox"] { cursor: pointer; width: 15px; height: 15px; flex-shrink: 0; }
 
 /* ===== PANEL ===== */
 .overlay {
@@ -613,16 +640,14 @@ td.col-ver a:hover { color: #1d4ed8; }
     <button class="drawer-close" id="btnDrawerClose">&times;</button>
   </div>
 
-  <select id="filterBarrio"><option value="">Todos los barrios</option></select>
-  <select id="filterEstado">
-    <option value="">Todos los estados</option>
-    <option value="Sin llamar">Sin llamar</option>
-    <option value="Llamado / no atendio">Llamado / no atendio</option>
-    <option value="Hablo - no interesado">Hablo - no interesado</option>
-    <option value="Hablo - interesado">Hablo - interesado</option>
-    <option value="Negociando / volver a llamar">Negociando / volver a llamar</option>
-    <option value="Captado">Captado</option>
-  </select>
+  <div class="ms-wrapper" id="msWrapperBarrio">
+    <button class="ms-btn" id="msBtnBarrio" data-name="filterBarrio">Todos los barrios</button>
+    <div class="ms-dropdown" id="msDropBarrio"></div>
+  </div>
+  <div class="ms-wrapper" id="msWrapperEstado">
+    <button class="ms-btn" id="msBtnEstado" data-name="filterEstado">Todos los estados</button>
+    <div class="ms-dropdown" id="msDropEstado"></div>
+  </div>
 
   <label class="checkbox-group"><input type="checkbox" id="filterNuevos"> Solo nuevos</label>
   <label class="checkbox-group"><input type="checkbox" id="filterBaja"> Solo baja de precio</label>
@@ -897,7 +922,8 @@ const TIPO_ABREV = {
 
 const ESTADOS = [
   "Sin llamar","Llamado / no atendio","Hablo - no interesado",
-  "Hablo - interesado","Negociando / volver a llamar","Captado"
+  "Hablo - interesado","Negociando / volver a llamar","Captado",
+  "Publicación desactivada"
 ];
 const ESTADO_CLASS = {
   "Sin llamar":                    "estado-sin-llamar",
@@ -905,7 +931,8 @@ const ESTADO_CLASS = {
   "Hablo - no interesado":        "estado-no-interesado",
   "Hablo - interesado":           "estado-interesado",
   "Negociando / volver a llamar": "estado-negociando",
-  "Captado":                      "estado-captado"
+  "Captado":                      "estado-captado",
+  "Publicación desactivada":      "estado-desactivada"
 };
 
 const COLUMNS = [
@@ -981,8 +1008,8 @@ document.getElementById("btnAplicarFiltros").addEventListener("click", () => {
 // ===== FILTER COUNT BADGE =====
 function updateFilterCount() {
   let n = 0;
-  if (document.getElementById("filterBarrio").value) n++;
-  if (document.getElementById("filterEstado").value) n++;
+  if (document.querySelectorAll('[name="filterBarrio"]:checked').length > 0) n++;
+  if (document.querySelectorAll('[name="filterEstado"]:checked').length > 0) n++;
   if (document.getElementById("filterNuevos").checked) n++;
   if (document.getElementById("filterBaja").checked) n++;
   if (parsePriceInput(document.getElementById("precioMin").value)) n++;
@@ -995,6 +1022,47 @@ function updateFilterCount() {
   el.textContent = n > 0 ? " (" + n + ")" : "";
 }
 
+// ===== MULTI-SELECT HELPERS =====
+function buildMsDropdown(dropId, btnId, name, items, allLabel) {
+  const drop = document.getElementById(dropId);
+  const btn  = document.getElementById(btnId);
+  drop.innerHTML = "";
+  items.forEach(val => {
+    const label = document.createElement("label");
+    label.className = "ms-item";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.name = name; cb.value = val;
+    cb.addEventListener("change", () => { updateMsBtn(btnId, name, allLabel); applyFilters(); });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(val));
+    drop.appendChild(label);
+  });
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    document.querySelectorAll(".ms-dropdown.open").forEach(d => { if (d !== drop) d.classList.remove("open"); });
+    drop.classList.toggle("open");
+  });
+}
+
+function updateMsBtn(btnId, name, allLabel) {
+  const checked = document.querySelectorAll(`[name="${name}"]:checked`);
+  const btn = document.getElementById(btnId);
+  if (checked.length === 0) {
+    btn.textContent = allLabel;
+    btn.classList.remove("active");
+  } else {
+    btn.textContent = checked.length + " " + (name === "filterBarrio"
+      ? (checked.length === 1 ? "barrio" : "barrios")
+      : (checked.length === 1 ? "estado" : "estados"));
+    btn.classList.add("active");
+  }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener("click", () => {
+  document.querySelectorAll(".ms-dropdown.open").forEach(d => d.classList.remove("open"));
+});
+
 // ===== INIT FILTERS =====
 function initFilters() {
   const barrios = [...new Set(data.map(d => d.barrio_simple))];
@@ -1003,11 +1071,8 @@ function initFilters() {
     const ob = data.find(d => d.barrio_simple === b)?.orden_barrio || 99;
     return oa - ob;
   });
-  const sel = document.getElementById("filterBarrio");
-  barrios.forEach(b => {
-    const o = document.createElement("option");
-    o.value = b; o.textContent = b; sel.appendChild(o);
-  });
+  buildMsDropdown("msDropBarrio", "msBtnBarrio", "filterBarrio", barrios, "Todos los barrios");
+  buildMsDropdown("msDropEstado", "msBtnEstado", "filterEstado", ESTADOS, "Todos los estados");
 
   const prices  = data.map(d => d.precio).filter(p => p > 0);
   const validPm2 = data.filter(d => !isSospechoso(d) && d.precio_m2_tasable > 0).map(d => d.precio_m2_tasable);
@@ -1047,8 +1112,8 @@ function formatPriceInput(el) {
 
 // ===== FILTER + SORT =====
 function applyFilters() {
-  const barrio          = document.getElementById("filterBarrio").value;
-  const estado          = document.getElementById("filterEstado").value;
+  const barriosSel      = new Set([...document.querySelectorAll('[name="filterBarrio"]:checked')].map(c => c.value));
+  const estadosSel      = new Set([...document.querySelectorAll('[name="filterEstado"]:checked')].map(c => c.value));
   const soloNuevos      = document.getElementById("filterNuevos").checked;
   const soloBaja        = document.getElementById("filterBaja").checked;
   const mostrarExcluidas = document.getElementById("filterExcluidas").checked;
@@ -1061,8 +1126,8 @@ function applyFilters() {
 
   filtered = data.filter(d => {
     if (!mostrarExcluidas && d.excluida) return false;
-    if (barrio    && d.barrio_simple !== barrio) return false;
-    if (estado    && d.estado !== estado) return false;
+    if (barriosSel.size > 0 && !barriosSel.has(d.barrio_simple)) return false;
+    if (estadosSel.size > 0 && !estadosSel.has(d.estado)) return false;
     if (soloNuevos && !d.es_nuevo) return false;
     if (soloBaja   && !d.bajo_precio) return false;
     if (precioMin !== null && d.precio < precioMin) return false;
@@ -1348,10 +1413,7 @@ document.getElementById("btnExcluir").addEventListener("click", async function()
   applyFilters();
 });
 
-// Standard filters
-["filterBarrio","filterEstado"].forEach(id => {
-  document.getElementById(id).addEventListener("change", applyFilters);
-});
+// (filterBarrio / filterEstado events are wired inside buildMsDropdown)
 ["filterNuevos","filterBaja","filterExcluidas"].forEach(id => {
   document.getElementById(id).addEventListener("change", applyFilters);
 });
