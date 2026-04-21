@@ -106,13 +106,18 @@ async def new_stealth_page_diario(pw):
 # ---------------------------------------------------------------------------
 # Configuración
 # ---------------------------------------------------------------------------
-BASE_URL         = "https://www.zonaprop.com.ar/inmuebles-dueno-directo-capital-federal.html"
+BASE_URL         = "https://www.zonaprop.com.ar/departamentos-venta-capital-federal-orden-publicado-descendente-dueno-directo.html"
 DB_PATH          = "data/zonaprop.db"
 CREDENTIALS_PATH = "credentials.json"
 SHEET_ID         = "13fWYaAwwe9qyVqfb08Qhu_zusak_uVvTQv3-1rhfwDA"
 WORKSHEET_NAME   = "Hoja 1"
 
 USAR_SHEETS_COMO_DB = os.environ.get("GITHUB_ACTIONS") == "true"
+
+# Parada temprana: si se recorren N páginas consecutivas sin encontrar
+# ninguna propiedad nueva, el scraper asume que ya pasó la frontera
+# de publicaciones recientes y detiene el escaneo.
+PAGINAS_SIN_NUEVAS_LIMITE = 5
 
 COLUMNAS_REQUERIDAS = [
     ("es_nuevo",              "INTEGER DEFAULT 0"),
@@ -452,12 +457,13 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
 
     Devuelve: ids_vistos, insertados, actualizados
     """
-    ids_vistos     = set()
-    nuevos_ids     = set()   # deduplicar a lo largo de todas las páginas
-    nuevos         = []      # todas las cards nuevas acumuladas
-    actualizados   = []
-    ids_procesados = set()   # nuevos ya detallados e insertados
-    insertados     = []      # rows insertados en DB (acumulado total)
+    ids_vistos          = set()
+    nuevos_ids          = set()   # deduplicar a lo largo de todas las páginas
+    nuevos              = []      # todas las cards nuevas acumuladas
+    actualizados        = []
+    ids_procesados      = set()   # nuevos ya detallados e insertados
+    insertados          = []      # rows insertados en DB (acumulado total)
+    paginas_sin_nuevas  = 0       # contador de páginas consecutivas sin nuevas
 
     list_browser, list_page = await new_stealth_page_diario(pw)
     try:
@@ -513,6 +519,13 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
                 ids_procesados.update(c.get("id_zonaprop") for c in nuevos_pagina)
                 insertados.extend(insertados_pagina)
                 print(f"  → {len(insertados_pagina)} nuevas insertadas en DB")
+                paginas_sin_nuevas = 0
+            else:
+                paginas_sin_nuevas += 1
+                if paginas_sin_nuevas >= PAGINAS_SIN_NUEVAS_LIMITE:
+                    print(f"  [!] {PAGINAS_SIN_NUEVAS_LIMITE} páginas consecutivas sin nuevas "
+                          f"→ parada temprana en página {page_num}")
+                    break
 
             if max_paginas and page_num >= max_paginas:
                 print(f"  Límite de páginas alcanzado ({max_paginas})")
