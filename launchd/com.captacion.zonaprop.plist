@@ -7,9 +7,8 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
-        <string>-c</string>
-        <string>cd "/Users/brian/Documents/Scraper de captacion inmobiliaria" && "/Users/brian/Documents/Scraper de captacion inmobiliaria/venv/bin/python" scrapers/scraper_diario.py >> "/Users/brian/Library/Logs/scraper_diario.log" 2>&1</string>
+        <string>/Users/brian/Documents/Scraper de captacion inmobiliaria/venv/bin/python3</string>
+        <string>/Users/brian/Documents/Scraper de captacion inmobiliaria/scrapers/scraper_diario.py</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -19,6 +18,9 @@
         <key>Minute</key>
         <integer>0</integer>
     </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/brian/Documents/Scraper de captacion inmobiliaria</string>
 
     <key>StandardOutPath</key>
     <string>/Users/brian/Library/Logs/scraper_diario.log</string>
