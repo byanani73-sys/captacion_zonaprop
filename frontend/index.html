@@ -1042,6 +1042,8 @@ function buildMsDropdown(dropId, btnId, name, items, allLabel) {
     document.querySelectorAll(".ms-dropdown.open").forEach(d => { if (d !== drop) d.classList.remove("open"); });
     drop.classList.toggle("open");
   });
+  // Evitar que clics dentro del dropdown burbujeen al document y lo cierren
+  drop.addEventListener("click", e => e.stopPropagation());
 }
 
 function updateMsBtn(btnId, name, allLabel) {
