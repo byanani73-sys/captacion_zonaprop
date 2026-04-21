@@ -598,9 +598,76 @@ def sincronizar_sheets(insertados: list, actualizados: list) -> None:
         print("  [!] Sheet vacío — omitiendo sync")
         return
 
-    if insertados:
-        escribir_nuevos_en_sheets(sh, insertados)
+    headers   = sh["headers"]
+    h_idx     = sh["h_idx"]
+    id_to_row = sh["id_to_row"]
 
+    # -----------------------------------------------------------------------
+    # Nuevos: separar los que ya existen en el Sheet de los verdaderamente nuevos
+    # Un ID puede estar en el Sheet pero no en SQLite si fue cargado por otro
+    # medio (migrar_a_sheets.py). En ese caso solo actualizamos columnas seguras.
+    # -----------------------------------------------------------------------
+    if insertados:
+        ya_en_sheet      = [r for r in insertados if     r["id_zonaprop"] in id_to_row]
+        realmente_nuevos = [r for r in insertados if not r["id_zonaprop"] in id_to_row]
+
+        # Filas que ya existen: actualizar solo precio_actual, precio_anterior,
+        # bajo_precio y es_nuevo. Nunca tocar estado ni nota.
+        COLS_SEGURAS = ["precio_actual", "precio_anterior", "bajo_precio", "es_nuevo"]
+        updates = []
+        for row in ya_en_sheet:
+            row_num = id_to_row[row["id_zonaprop"]]
+            for col in COLS_SEGURAS:
+                if col in h_idx:
+                    val = row.get(col, "")
+                    if val is None: val = ""
+                    updates.append({
+                        "range":  f"{col_letter(h_idx[col])}{row_num}",
+                        "values": [[val]],
+                    })
+        if updates:
+            ws.batch_update(updates)
+            print(f"  ✓ {len(ya_en_sheet)} filas ya existentes — actualizadas precio/es_nuevo "
+                  f"(estado y nota intactos)")
+            time.sleep(1)
+
+        # Filas verdaderamente nuevas: append al final con estado='Sin llamar', nota=''
+        if realmente_nuevos:
+            nuevas_filas = []
+            for row in realmente_nuevos:
+                fila = []
+                for h in headers:
+                    if h == "estado":
+                        fila.append("Sin llamar")
+                    elif h == "nota":
+                        fila.append("")
+                    else:
+                        val = row.get(h)
+                        if val is None:
+                            fila.append("")
+                        elif isinstance(val, bool):
+                            fila.append("TRUE" if val else "FALSE")
+                        else:
+                            fila.append(val)
+                nuevas_filas.append(fila)
+
+            all_values       = ws.get_all_values()
+            filas_necesarias = len(all_values) + len(nuevas_filas) + 100
+            if filas_necesarias > ws.row_count:
+                ws.add_rows(filas_necesarias - ws.row_count)
+                print(f"  Sheet expandido a {filas_necesarias} filas")
+
+            ws.append_rows(nuevas_filas, value_input_option="RAW")
+            print(f"  ✓ {len(realmente_nuevos)} filas nuevas agregadas al Sheet")
+            time.sleep(1)
+
+        if not ya_en_sheet and not realmente_nuevos:
+            print("  Sin nuevos para escribir")
+
+    # -----------------------------------------------------------------------
+    # Actualizados: solo precio_actual, precio_anterior, bajo_precio
+    # (ya implementado correctamente en actualizar_precios_sheets)
+    # -----------------------------------------------------------------------
     if actualizados:
         actualizar_precios_sheets(sh, actualizados)
 
