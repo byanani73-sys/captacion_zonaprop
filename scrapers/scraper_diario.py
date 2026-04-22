@@ -105,7 +105,7 @@ async def new_stealth_page_diario(pw):
 # ---------------------------------------------------------------------------
 # Configuración
 # ---------------------------------------------------------------------------
-BASE_URL         = "https://www.zonaprop.com.ar/departamentos-venta-capital-federal-orden-publicado-descendente-dueno-directo.html"
+BASE_URL         = "https://www.zonaprop.com.ar/inmuebles-venta-capital-federal-orden-publicado-descendente-dueno-directo.html"
 DB_PATH          = "data/zonaprop.db"
 CREDENTIALS_PATH = "credentials.json"
 SHEET_ID         = "13fWYaAwwe9qyVqfb08Qhu_zusak_uVvTQv3-1rhfwDA"
