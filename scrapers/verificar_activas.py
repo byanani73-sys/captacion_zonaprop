@@ -7,6 +7,7 @@ con Playwright+stealth y detecta si fue dada de baja. Actualiza SQLite y Sheet.
 Uso:
   python scrapers/verificar_activas.py
   python scrapers/verificar_activas.py --limite 50       # solo las primeras N
+  python scrapers/verificar_activas.py --dias 7          # solo las ingresadas hace >7 días
   python scrapers/verificar_activas.py --sin-sheets      # no sync al Sheet
   python scrapers/verificar_activas.py --dry-run         # no escribe nada
 
@@ -52,10 +53,9 @@ _stealth = Stealth()
 # ---------------------------------------------------------------------------
 # Configuración
 # ---------------------------------------------------------------------------
-DELAY_ENTRE_REQUESTS = 2          # segundos entre visitas
-BROWSER_CADA_N       = 20         # reabrir browser cada N requests
-TIMEOUT_MS           = 25_000     # timeout por navegación (ms)
-CF_TIMEOUT_SECS      = 30         # tiempo max esperando pasar Cloudflare
+DELAY_ENTRE_REQUESTS = 2       # segundos entre visitas
+TIMEOUT_MS           = 25_000  # timeout por navegación (ms)
+CF_TIMEOUT_SECS      = 30      # tiempo max esperando pasar Cloudflare
 
 # Estados que NO se verifican (ya resueltos)
 ESTADOS_EXCLUIDOS = {
@@ -78,21 +78,6 @@ NOT_FOUND_PHRASES = [
 ZONAPROP_HOME = "https://www.zonaprop.com.ar/"
 
 
-# ---------------------------------------------------------------------------
-# Browser helpers
-# ---------------------------------------------------------------------------
-async def new_browser_page(pw):
-    browser = await pw.chromium.launch(headless=True, args=LOCAL_BROWSER_ARGS)
-    context = await browser.new_context(
-        user_agent=LOCAL_USER_AGENT,
-        viewport=LOCAL_VIEWPORT,
-        locale="es-AR",
-    )
-    page = await context.new_page()
-    await _stealth.apply_stealth_async(page)
-    return browser, page
-
-
 def slug_de_url(url: str) -> str:
     """Extrae el slug final de la URL para comparar redirecciones."""
     # 'https://...zonaprop.com.ar/propiedades/veclappa-depto-12345678.html'
@@ -102,92 +87,120 @@ def slug_de_url(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Detección de baja
+# Detección de baja — browser fresco por cada URL (igual que fetch_detail)
 # ---------------------------------------------------------------------------
-async def esta_activa(page, url: str) -> tuple[bool | None, str]:
+async def esta_activa(pw, url: str) -> tuple[bool | None, str]:
     """
-    Navega a url y determina si la publicación sigue activa.
+    Abre un browser stealth nuevo, navega a url, determina si la publicación
+    sigue activa y cierra el browser. Un browser fresco por request es la
+    única estrategia que demostró funcionar contra Cloudflare en este proyecto.
 
     Devuelve:
       (True,  razón)  — sigue activa
       (False, razón)  — dada de baja / no encontrada
       (None,  razón)  — no se pudo determinar (CF, timeout, error de red)
     """
+    browser = await pw.chromium.launch(headless=True, args=LOCAL_BROWSER_ARGS)
     try:
-        response = await page.goto(url, wait_until="domcontentloaded",
-                                   timeout=TIMEOUT_MS)
-    except Exception as e:
-        return None, f"error navegación: {type(e).__name__}"
+        context = await browser.new_context(
+            user_agent=LOCAL_USER_AGENT,
+            viewport=LOCAL_VIEWPORT,
+            locale="es-AR",
+        )
+        page = await context.new_page()
+        await _stealth.apply_stealth_async(page)
 
-    # Esperar CF si aplica
-    if not await wait_for_cf(page, timeout_secs=CF_TIMEOUT_SECS):
-        return None, "Cloudflare bloqueó"
+        try:
+            response = await page.goto(url, wait_until="domcontentloaded",
+                                       timeout=TIMEOUT_MS)
+        except Exception as e:
+            return None, f"error navegación: {type(e).__name__}"
 
-    await page.wait_for_timeout(1000)
+        # Esperar CF si aplica
+        if not await wait_for_cf(page, timeout_secs=CF_TIMEOUT_SECS):
+            return None, "Cloudflare bloqueó"
 
-    final_url = page.url
+        await page.wait_for_timeout(1000)
 
-    # Señal 1 — HTTP 4xx
-    if response and response.status >= 400:
-        return False, f"HTTP {response.status}"
+        final_url = page.url
 
-    # Señal 2 — redirigida a la home
-    if final_url.rstrip("/") == ZONAPROP_HOME.rstrip("/"):
-        return False, "redirigida a home"
+        # Señal 1 — HTTP 4xx
+        if response and response.status >= 400:
+            return False, f"HTTP {response.status}"
 
-    # Señal 3 — URL final no contiene el slug original
-    slug_orig  = slug_de_url(url)
-    slug_final = slug_de_url(final_url)
-    if slug_orig and slug_final and slug_orig != slug_final:
-        return False, f"URL cambió → {final_url[:70]}"
+        # Señal 2 — redirigida a la home
+        if final_url.rstrip("/") == ZONAPROP_HOME.rstrip("/"):
+            return False, "redirigida a home"
 
-    # Señal 4 — texto de página indica "no encontrada"
-    try:
-        content = (await page.content()).lower()
-    except Exception:
-        content = ""
-    for phrase in NOT_FOUND_PHRASES:
-        if phrase in content:
-            return False, f"texto: '{phrase}'"
+        # Señal 3 — URL final no contiene el slug original
+        slug_orig  = slug_de_url(url)
+        slug_final = slug_de_url(final_url)
+        if slug_orig and slug_final and slug_orig != slug_final:
+            return False, f"URL cambió → {final_url[:70]}"
 
-    # Señal 5 — ausencia del elemento de detalle (title-type es exclusivo del detalle)
-    try:
-        title_el = await page.query_selector("[class*='title-type']")
-        if not title_el:
-            # Solo marcamos baja si encima la URL no es una listing URL
-            if "clasificado" not in final_url and "propiedades" not in final_url:
-                return False, "sin detalle + URL no es listing"
-    except Exception:
-        pass
+        # Señal 4 — texto de página indica "no encontrada"
+        try:
+            content = (await page.content()).lower()
+        except Exception:
+            content = ""
+        for phrase in NOT_FOUND_PHRASES:
+            if phrase in content:
+                return False, f"texto: '{phrase}'"
 
-    return True, "OK"
+        # Señal 5 — ausencia del elemento de detalle (title-type es exclusivo del detalle)
+        try:
+            title_el = await page.query_selector("[class*='title-type']")
+            if not title_el:
+                if "clasificado" not in final_url and "propiedades" not in final_url:
+                    return False, "sin detalle + URL no es listing"
+        except Exception:
+            pass
+
+        return True, "OK"
+
+    finally:
+        await browser.close()
 
 
 # ---------------------------------------------------------------------------
 # SQLite
 # ---------------------------------------------------------------------------
-def cargar_propiedades_db(ids_validos: set | None) -> list[dict]:
+def cargar_propiedades_db(ids_validos: set | None, dias: int | None) -> list[dict]:
     """
-    Carga de SQLite todas las propiedades activas a verificar.
-    Si ids_validos no es None, solo devuelve las que estén en ese set.
+    Carga de SQLite las propiedades activas a verificar.
+
+    ids_validos  — si no es None, filtra solo esos IDs (viene del Sheet)
+    dias         — si no es None, solo propiedades con
+                   fecha_primera_vez <= hoy - N días (las más antiguas primero)
     """
     conn = sqlite3.connect(DB_PATH)
+
+    where = "activa = 1 AND url IS NOT NULL"
+    params: list = []
+    if dias is not None:
+        where += " AND DATE(fecha_primera_vez) <= DATE('now', ?)"
+        params.append(f"-{dias} days")
+
     rows = conn.execute(
-        """SELECT id_zonaprop, url, barrio_simple, precio_por_m2_tasable
-           FROM propiedades
-           WHERE activa = 1 AND url IS NOT NULL"""
+        f"""SELECT id_zonaprop, url, barrio_simple, precio_por_m2_tasable,
+                   fecha_primera_vez
+            FROM propiedades
+            WHERE {where}
+            ORDER BY fecha_primera_vez ASC""",
+        params,
     ).fetchall()
     conn.close()
 
     props = []
-    for id_zp, url, barrio, pm2 in rows:
+    for id_zp, url, barrio, pm2, fecha in rows:
         if ids_validos is not None and id_zp not in ids_validos:
             continue
         props.append({
-            "id": id_zp,
-            "url": url,
+            "id":    id_zp,
+            "url":   url,
             "barrio": barrio or "?",
-            "pm2": pm2 or 0,
+            "pm2":   pm2 or 0,
+            "fecha": (fecha or "")[:10],
         })
     return props
 
@@ -266,7 +279,7 @@ def sincronizar_desactivadas_sheets(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-async def main(limite: int | None, sin_sheets: bool, dry_run: bool) -> None:
+async def main(limite: int | None, dias: int | None, sin_sheets: bool, dry_run: bool) -> None:
     t0  = time.time()
     hoy = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -319,23 +332,24 @@ async def main(limite: int | None, sin_sheets: bool, dry_run: bool) -> None:
     # 2. Cargar propiedades de SQLite
     # -----------------------------------------------------------------------
     print("\n[2/4] Cargando propiedades de SQLite...")
-    propiedades = cargar_propiedades_db(ids_validos)
+    propiedades = cargar_propiedades_db(ids_validos, dias)
 
     if limite:
         propiedades = propiedades[:limite]
 
     total = len(propiedades)
-    print(f"  {total} propiedades a verificar")
+    filtro_dias = f" con fecha_primera_vez <= hoy - {dias}d" if dias else ""
+    print(f"  {total} propiedades a verificar{filtro_dias}")
 
     if total == 0:
         print("\nNada que verificar.")
         return
 
     # -----------------------------------------------------------------------
-    # 3. Verificar URLs
+    # 3. Verificar URLs — browser fresco por cada propiedad
     # -----------------------------------------------------------------------
     print(f"\n[3/4] Verificando {total} URLs "
-          f"(browser cada {BROWSER_CADA_N}, delay {DELAY_ENTRE_REQUESTS}s)...\n")
+          f"(browser fresco por request, delay {DELAY_ENTRE_REQUESTS}s)...\n")
 
     resultados   = {}   # id → True/False/None
     desactivadas = []
@@ -347,56 +361,37 @@ async def main(limite: int | None, sin_sheets: bool, dry_run: bool) -> None:
         iterable = propiedades
 
     async with async_playwright() as pw:
-        browser = None
-        page    = None
-        req_count = 0
-
         for idx, prop in enumerate(iterable):
-            # Reabrir browser cada N requests
-            if req_count % BROWSER_CADA_N == 0:
-                if browser:
-                    await browser.close()
-                browser, page = await new_browser_page(pw)
-                req_count = 0
-
             id_zp  = prop["id"]
             url    = prop["url"]
             barrio = prop["barrio"]
             pm2    = prop["pm2"]
+            fecha  = prop["fecha"]
             pos    = idx + 1
 
-            activa, razon = await esta_activa(page, url)
-            req_count += 1
-
-            # Si CF bloqueó este browser, forzar reopen en la próxima iteración
-            if activa is None and "Cloudflare" in razon:
-                req_count = BROWSER_CADA_N
-
+            activa, razon = await esta_activa(pw, url)
             resultados[id_zp] = activa
 
-            pm2_str = f"USD {pm2:,.0f}/m²" if pm2 else "sin m²"
+            pm2_str   = f"USD {pm2:,.0f}/m²" if pm2 else "sin m²"
+            fecha_str = fecha or "?"
 
             if not TQDM_AVAILABLE:
                 if activa is True:
-                    print(f"  [{pos:>4}/{total}] ✓ activa      | {barrio:<20} | {pm2_str}")
+                    print(f"  [{pos:>4}/{total}] ✓ activa      | {barrio:<20} | {pm2_str} | {fecha_str}")
                 elif activa is False:
-                    print(f"  [{pos:>4}/{total}] ✗ desactivada | {barrio:<20} | {pm2_str}")
                     desactivadas.append(id_zp)
+                    print(f"  [{pos:>4}/{total}] ✗ desactivada | {barrio:<20} | {pm2_str} | {fecha_str}")
                 else:
                     print(f"  [{pos:>4}/{total}] ? indetermin. | {barrio:<20} | {pm2_str} — {razon}")
             else:
-                # Con tqdm: log solo las desactivadas e indeterminadas para no romper la barra
                 if activa is False:
                     desactivadas.append(id_zp)
-                    tqdm.write(f"  [{pos:>4}/{total}] ✗ desactivada | {barrio} | {pm2_str}")
+                    tqdm.write(f"  [{pos:>4}/{total}] ✗ desactivada | {barrio} | {pm2_str} | {fecha_str}")
                 elif activa is None:
                     tqdm.write(f"  [{pos:>4}/{total}] ? indetermin. | {barrio} | {razon}")
 
             if idx < total - 1:
                 await asyncio.sleep(DELAY_ENTRE_REQUESTS + random.uniform(0, 0.5))
-
-        if browser:
-            await browser.close()
 
     activas_count      = sum(1 for v in resultados.values() if v is True)
     desactivadas_count = len(desactivadas)
@@ -449,6 +444,12 @@ def parse_args():
         help="Verificar solo las primeras N propiedades (útil para pruebas)",
     )
     parser.add_argument(
+        "--dias", type=int, default=None,
+        metavar="N",
+        help="Solo verificar propiedades ingresadas hace más de N días "
+             "(prioriza las más antiguas, orden ASC por fecha_primera_vez)",
+    )
+    parser.add_argument(
         "--sin-sheets", action="store_true",
         help="No sincronizar con Google Sheets",
     )
@@ -463,6 +464,7 @@ if __name__ == "__main__":
     args = parse_args()
     asyncio.run(main(
         limite=args.limite,
+        dias=args.dias,
         sin_sheets=args.sin_sheets,
         dry_run=args.dry_run,
     ))
