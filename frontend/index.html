@@ -849,10 +849,10 @@ function parseProp(obj) {
     fecha_ingreso:     obj.fecha_primera_vez         || "",
     tipo_propiedad:    obj.tipo_propiedad             || "",
     tipo_operacion:    obj.tipo_operacion             || "",
-    excluida:          obj.excluida === "TRUE" || obj.excluida === true || obj.excluida === "true" || obj.excluida === "1",
-    es_nuevo:          false,
-    bajo_precio:       false,
-    precio_anterior:   null
+    excluida:          isTruthy(obj.excluida),
+    es_nuevo:          isTruthy(obj.es_nuevo),
+    bajo_precio:       isTruthy(obj.bajo_precio),
+    precio_anterior:   parseFloat(obj.precio_anterior) || null
   };
 }
 
@@ -937,6 +937,7 @@ const ESTADO_CLASS = {
 
 const COLUMNS = [
   { key:"barrio_simple",    label:"Barrio",           sortKey:"orden_barrio" },
+  { key:"fecha_ingreso",    label:"Publicado" },
   { key:"tipo_propiedad",   label:"Tipo" },
   { key:"tipo_operacion",   label:"Op." },
   { key:"direccion",        label:"Dirección" },
@@ -961,6 +962,17 @@ function fmtNum(n) { return n != null ? n.toLocaleString("es-AR") : "-"; }
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s; return d.innerHTML;
+}
+/** Acepta 1, "1", true, "TRUE", "true" como verdadero (el Sheet mezcla ambos formatos). */
+function isTruthy(v) {
+  return v === true || v === 1 || v === "1" || v === "TRUE" || v === "true";
+}
+/** "2026-04-21 11:34:21" o "2026-04-21" → "21/04/2026" */
+function fmtFecha(s) {
+  if (!s) return "-";
+  const partes = s.substring(0, 10).split("-");
+  if (partes.length !== 3) return s;
+  return partes[2] + "/" + partes[1] + "/" + partes[0];
 }
 
 // ===== TOGGLE BUTTONS =====
@@ -1215,7 +1227,12 @@ function renderTableBody() {
     tr.addEventListener("click", () => openPanel(d.id));
     COLUMNS.forEach(col => {
       const td = document.createElement("td");
-      if (col.key === "tipo_propiedad") {
+      if (col.key === "fecha_ingreso") {
+        td.style.whiteSpace = "nowrap";
+        td.style.color = "#64748b";
+        td.style.fontSize = ".82rem";
+        td.textContent = fmtFecha(d.fecha_ingreso);
+      } else if (col.key === "tipo_propiedad") {
         td.classList.add("col-tipo");
         td.textContent = TIPO_ABREV[d.tipo_propiedad] || d.tipo_propiedad || "-";
         td.title = d.tipo_propiedad || "";
@@ -1325,7 +1342,8 @@ function openPanel(id) {
 
   document.getElementById("panelBarrio").textContent = d.barrio_simple;
   document.getElementById("panelSub").textContent =
-    d.direccion + "  \u00b7  " + (d.antiguedad || "-");
+    d.direccion + "  \u00b7  " + (d.antiguedad || "-") +
+    (d.fecha_ingreso ? "  \u00b7  Pub. " + fmtFecha(d.fecha_ingreso) : "");
 
   const pc = document.getElementById("panelPriceChange");
   if (d.bajo_precio && d.precio_anterior) {
