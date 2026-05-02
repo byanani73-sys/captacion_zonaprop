@@ -57,10 +57,13 @@ MAPEO_BARRIOS = {
 }
 
 ORDEN_BARRIOS = [
-    "Palermo", "Belgrano", "Recoleta", "Caballito", "Villa Urquiza",
-    "N\u00fa\u00f1ez", "Colegiales", "Villa Crespo", "Almagro", "Saavedra",
-    "Villa del Parque", "Chacarita", "Flores", "San Telmo", "Boedo",
-    "Villa Devoto", "Coghlan", "Retiro", "Puerto Madero", "Centro / Microcentro",
+    # Prioridad definida por el usuario
+    "Palermo", "Recoleta", "Belgrano", "Villa Urquiza", "Saavedra",
+    "N\u00fa\u00f1ez", "Coghlan", "Colegiales", "Villa del Parque", "Caballito",
+    "Villa Crespo",
+    # Resto en orden original
+    "Almagro", "Chacarita", "Flores", "San Telmo", "Boedo",
+    "Villa Devoto", "Retiro", "Puerto Madero", "Centro / Microcentro",
     "Tribunales", "Monserrat", "La Paternal", "Parque Chas", "Floresta",
     "San Crist\u00f3bal", "Once", "Congreso", "Balvanera", "Parque Patricios",
     "Barracas / La Boca", "Mataderos", "Agron\u00f3mia", "Otros",

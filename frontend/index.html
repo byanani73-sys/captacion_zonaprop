@@ -245,14 +245,8 @@ thead th {
   text-transform: uppercase;
   letter-spacing: .03em;
   white-space: nowrap;
-  cursor: pointer;
-  user-select: none;
   border-bottom: 2px solid #e2e8f0;
-  position: relative;
 }
-thead th:hover { background: #eef2f7; }
-thead th .sort-arrow { margin-left: 4px; font-size: .7rem; color: #94a3b8; }
-thead th.sorted .sort-arrow { color: #111827; }
 tbody tr {
   border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
@@ -649,6 +643,15 @@ td.col-ver a:hover { color: #1d4ed8; }
     <div class="ms-dropdown" id="msDropEstado"></div>
   </div>
 
+  <div class="price-input-group">
+    <span>Ordenar por:</span>
+    <select id="sortSelect">
+      <option value="pm2_asc">USD/m² menor a mayor</option>
+      <option value="precio_asc">Precio total menor a mayor</option>
+      <option value="precio_desc">Precio total mayor a menor</option>
+    </select>
+  </div>
+
   <label class="checkbox-group"><input type="checkbox" id="filterNuevos"> Solo nuevos</label>
   <label class="checkbox-group"><input type="checkbox" id="filterBaja"> Solo baja de precio</label>
   <label class="checkbox-group"><input type="checkbox" id="filterExcluidas"> Mostrar excluidas</label>
@@ -892,8 +895,6 @@ async function guardarCambio(id, campo, valor) {
 // ===== STATE =====
 let data     = [];
 let filtered = [];
-let sortCol  = "orden_barrio";
-let sortDir  = 1;
 let activeId = null;
 
 // Toggle filter state — with defaults
@@ -936,7 +937,7 @@ const ESTADO_CLASS = {
 };
 
 const COLUMNS = [
-  { key:"barrio_simple",    label:"Barrio",           sortKey:"orden_barrio" },
+  { key:"barrio_simple",    label:"Barrio" },
   { key:"fecha_ingreso",    label:"Publicado" },
   { key:"tipo_propiedad",   label:"Tipo" },
   { key:"tipo_operacion",   label:"Op." },
@@ -950,7 +951,7 @@ const COLUMNS = [
   { key:"antiguedad",       label:"Antigüedad" },
   { key:"estado",           label:"Estado" },
   { key:"nota",             label:"Nota" },
-  { key:"ver",              label:"Ver",              noSort:true }
+  { key:"ver",              label:"Ver" }
 ];
 
 const PRECIO_SOSPECHOSO = 800;
@@ -1088,6 +1089,12 @@ function initFilters() {
   buildMsDropdown("msDropBarrio", "msBtnBarrio", "filterBarrio", barrios, "Todos los barrios");
   buildMsDropdown("msDropEstado", "msBtnEstado", "filterEstado", ESTADOS, "Todos los estados");
 
+  // Pre-tildar todos los estados excepto "Publicación desactivada"
+  document.querySelectorAll('[name="filterEstado"]').forEach(cb => {
+    cb.checked = cb.value !== "Publicación desactivada";
+  });
+  updateMsBtn("msBtnEstado", "filterEstado", "Todos los estados");
+
   const prices  = data.map(d => d.precio).filter(p => p > 0);
   const validPm2 = data.filter(d => !isSospechoso(d) && d.precio_m2_tasable > 0).map(d => d.precio_m2_tasable);
   if (prices.length) {
@@ -1177,17 +1184,17 @@ function applyTopN() {
 }
 
 function applySort() {
+  const mode = document.getElementById("sortSelect").value;
   filtered.sort((a, b) => {
-    const key = COLUMNS.find(c => (c.sortKey || c.key) === sortCol) ? sortCol : "orden_barrio";
-    let va = a[key], vb = b[key];
-    if (typeof va === "string") va = va.toLowerCase();
-    if (typeof vb === "string") vb = vb.toLowerCase();
-    if (va < vb) return -1 * sortDir;
-    if (va > vb) return  1 * sortDir;
-    const sa = isSospechoso(a) ? 1 : 0;
-    const sb = isSospechoso(b) ? 1 : 0;
-    if (sa !== sb) return sa - sb;
-    if (key !== "precio_m2_tasable") return a.precio_m2_tasable - b.precio_m2_tasable;
+    if (mode === "pm2_asc") {
+      // Sospechosos al final
+      const sa = isSospechoso(a) ? 1 : 0;
+      const sb = isSospechoso(b) ? 1 : 0;
+      if (sa !== sb) return sa - sb;
+      return a.precio_m2_tasable - b.precio_m2_tasable;
+    }
+    if (mode === "precio_asc")  return a.precio - b.precio;
+    if (mode === "precio_desc") return b.precio - a.precio;
     return 0;
   });
 }
@@ -1198,21 +1205,7 @@ function buildHead() {
   tr.innerHTML = "";
   COLUMNS.forEach(col => {
     const th = document.createElement("th");
-    if (col.noSort) {
-      th.textContent = col.label;
-      th.style.cursor = "default";
-    } else {
-      const sk = col.sortKey || col.key;
-      const isSorted = sortCol === sk;
-      if (isSorted) th.classList.add("sorted");
-      const arrow = isSorted ? (sortDir === 1 ? "\u25B2" : "\u25BC") : "\u25B4";
-      th.innerHTML = col.label + ' <span class="sort-arrow">' + arrow + "</span>";
-      th.addEventListener("click", () => {
-        if (sortCol === sk) sortDir *= -1;
-        else { sortCol = sk; sortDir = 1; }
-        applySort(); render();
-      });
-    }
+    th.textContent = col.label;
     tr.appendChild(th);
   });
 }
@@ -1443,6 +1436,10 @@ document.getElementById("btnExcluir").addEventListener("click", async function()
 document.getElementById("topN").addEventListener("input", function() {
   this.value = this.value.replace(/\D/g, "");
   applyFilters();
+});
+document.getElementById("sortSelect").addEventListener("change", function() {
+  applySort();
+  render();
 });
 
 // ===== BOOT =====
