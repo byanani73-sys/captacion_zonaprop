@@ -266,6 +266,15 @@ td.col-nota {
   text-overflow: ellipsis; white-space: nowrap;
   color: #64748b; font-size: .82rem;
 }
+td.col-telefono { font-size: .85rem; white-space: nowrap; cursor: text; }
+td.col-telefono:hover { background: #f0f7ff !important; }
+.tel-empty { color: #94a3b8; }
+.tel-input {
+  border: 1px solid #3b82f6; border-radius: 4px;
+  padding: 3px 7px; font-size: .85rem; font-family: inherit;
+  width: 130px; outline: none;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
 td.col-tipo { font-size: .8rem; white-space: nowrap; }
 td.col-op   { font-size: .78rem; white-space: nowrap; color: #64748b; }
 td.col-ver  { text-align: center; }
@@ -451,6 +460,34 @@ td.col-ver a:hover { color: #1d4ed8; }
 }
 .panel-field textarea { resize: vertical; min-height: 70px; }
 
+/* ===== PUBLICANTE BLOCK (panel) ===== */
+.panel-publicante {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.panel-publicante .pub-label {
+  font-size: .75rem; font-weight: 700;
+  color: #475569; text-transform: uppercase;
+  letter-spacing: .04em; display: block; margin-bottom: 8px;
+}
+.panel-publicante .pub-row { display: flex; gap: 8px; }
+.panel-publicante input {
+  flex: 1; padding: 7px 10px;
+  border: 1px solid #cbd5e1; border-radius: 6px;
+  font-size: .88rem; font-family: inherit;
+  background: #fff;
+}
+.panel-publicante input:focus {
+  outline: none; border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
+@media (max-width: 768px) {
+  .panel-publicante input { font-size: 16px; }
+}
+
 .panel-link {
   display: inline-flex; align-items: center; gap: 4px;
   color: #2563eb; text-decoration: none; font-weight: 600;
@@ -469,6 +506,184 @@ td.col-ver a:hover { color: #1d4ed8; }
   color: #94a3b8; transition: color .2s;
 }
 .save-indicator.saved { color: #16a34a; }
+
+/* ===== LLAMADAS BUTTON ===== */
+.btn-llamadas {
+  background: none;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: .8rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-llamadas:hover { background: #1f2937; color: #fff; }
+.btn-llamadas.active { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+
+/* ===== CALL DATE COLORS ===== */
+.call-vencida { color: #dc2626; }
+.call-hoy     { color: #d97706; }
+.call-futura  { color: #64748b; }
+
+/* ===== PANEL CALL BLOCK ===== */
+.panel-call-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.call-date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.call-date-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.call-date {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.call-date-status {
+  font-size: .8rem;
+  font-weight: 400;
+  margin-left: 4px;
+}
+.call-notas-text {
+  font-size: .85rem;
+  color: #475569;
+  margin-bottom: 10px;
+  font-style: italic;
+}
+.call-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.call-reagendar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.call-agendar-label {
+  font-size: .85rem;
+  color: #475569;
+}
+.btn-call-action {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: .85rem;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background .12s;
+  white-space: nowrap;
+}
+.btn-llamada-hecha {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #86efac;
+}
+.btn-llamada-hecha:hover { background: #dcfce7; }
+.btn-reagendar, .btn-agendar {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+.btn-reagendar:hover, .btn-agendar:hover { background: #dbeafe; }
+.call-select, .call-input {
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: .85rem;
+  font-family: inherit;
+  background: #fff;
+}
+.call-input {
+  width: 64px;
+  text-align: center;
+}
+
+/* ===== LLAMADAS VIEW ===== */
+.llamadas-content {
+  padding: 16px 24px 48px;
+}
+.llamadas-group {
+  margin-bottom: 28px;
+}
+.llamadas-group-title {
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-block;
+}
+.llamadas-group-title.call-vencida { background: #fef2f2; color: #dc2626; }
+.llamadas-group-title.call-hoy     { background: #fffbeb; color: #d97706; }
+.llamadas-group-title.call-futura  { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+.llamadas-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  transition: background .1s;
+  flex-wrap: wrap;
+}
+.llamadas-row:hover { background: #f0f7ff; }
+.llamadas-fecha {
+  font-weight: 700;
+  font-size: .95rem;
+  min-width: 46px;
+  flex-shrink: 0;
+}
+.llamadas-barrio {
+  font-weight: 600;
+  min-width: 90px;
+  font-size: .88rem;
+  flex-shrink: 0;
+}
+.llamadas-dir {
+  color: #64748b;
+  font-size: .85rem;
+  flex: 1;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.llamadas-precio {
+  font-weight: 600;
+  font-size: .85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.llamadas-empty {
+  color: #64748b;
+  padding: 60px 24px;
+  text-align: center;
+  font-size: .95rem;
+}
 
 /* ===== LOGIN ===== */
 .login-screen {
@@ -495,6 +710,14 @@ td.col-ver a:hover { color: #1d4ed8; }
 .login-error { color: #dc2626; font-size: .85rem; margin-top: 16px; display: none; }
 
 /* ===== LOGOUT ===== */
+.btn-actualizar {
+  background: none; border: 1px solid #475569; color: #cbd5e1;
+  padding: 6px 14px; border-radius: 6px; font-size: .8rem;
+  cursor: pointer; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.btn-actualizar:hover { background: #1f2937; color: #fff; }
+.btn-actualizar:disabled { opacity: .5; cursor: not-allowed; }
 .btn-logout {
   background: none; border: 1px solid #475569; color: #cbd5e1;
   padding: 6px 14px; border-radius: 6px; font-size: .8rem;
@@ -618,6 +841,8 @@ td.col-ver a:hover { color: #1d4ed8; }
   <div class="header-right">
     <span class="counter" id="counter">Mostrando 0 de 0 propiedades</span>
     <button class="btn-filtros" id="btnFiltros">⊞ Filtros<span class="filter-count" id="filtrosCount"></span></button>
+    <button class="btn-llamadas" id="btnLlamadas">📞 Llamadas</button>
+    <button class="btn-actualizar" id="btnActualizar">↻ Actualizar</button>
     <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
   </div>
 </div>
@@ -725,6 +950,9 @@ td.col-ver a:hover { color: #1d4ed8; }
 <!-- CARDS (mobile) -->
 <div class="cards-wrapper" id="cardsWrapper" style="display:none"></div>
 
+<!-- LLAMADAS VIEW -->
+<div id="llamadasView" style="display:none"><div class="llamadas-content" id="llamadasContent"></div></div>
+
 <!-- OVERLAY + PANEL -->
 <div class="overlay" id="overlay"></div>
 <div class="panel" id="panel">
@@ -749,6 +977,14 @@ td.col-ver a:hover { color: #1d4ed8; }
       <label>Nota</label>
       <textarea id="panelNota" placeholder="Agregar nota..."></textarea>
     </div>
+    <div class="panel-publicante">
+      <span class="pub-label">Publicante</span>
+      <div class="pub-row">
+        <input type="text" id="panelNombrePub"   placeholder="Nombre...">
+        <input type="text" id="panelTelefonoPub" placeholder="Teléfono...">
+      </div>
+    </div>
+    <div id="panelCallBlock"></div>
     <div class="save-indicator" id="saveIndicator"></div>
     <button class="btn-excluir" id="btnExcluir">🚫 Excluir — es inmobiliaria</button>
   </div>
@@ -807,6 +1043,34 @@ document.getElementById("btnGoogle").addEventListener("click", function() {
 });
 document.getElementById("btnLogout").addEventListener("click", function() { auth.signOut(); });
 
+// ===== BOTÓN ACTUALIZAR =====
+const TRIGGER_SECRET = "captacion-zp-2024-secreto";
+document.getElementById("btnActualizar").addEventListener("click", async function() {
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = "↻ Iniciando...";
+  try {
+    const res = await fetch("/.netlify/functions/trigger-scraper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: TRIGGER_SECRET }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      btn.textContent = "✓ Scraper iniciado";
+      setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 4000);
+    } else {
+      btn.textContent = "✗ Error";
+      console.error("trigger-scraper error:", json);
+      setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 3000);
+    }
+  } catch (err) {
+    btn.textContent = "✗ Error";
+    console.error("trigger-scraper fetch error:", err);
+    setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 3000);
+  }
+});
+
 // ===== APP INIT =====
 let appInitialized = false;
 async function initApp() {
@@ -833,6 +1097,13 @@ async function initApp() {
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwBfwlMtbgpCbisKFqZxzdWNZAePzzG8XbGaBeL7Pe_g5Hv3egavwpkfEZbXediqB5cPg/exec";
 const API_KEY = "captacion-zp-2024-secreto";
 
+/** Normaliza cualquier formato de fecha a "YYYY-MM-DD", o "" si vacío/inválido. */
+function isoDate(s) {
+  if (!s) return "";
+  // Si viene como timestamp completo ("2026-05-27T03:00:00.000Z"), toma los primeros 10 chars.
+  return s.toString().slice(0, 10);
+}
+
 function parseProp(obj) {
   return {
     id:                obj.id_zonaprop               || "",
@@ -849,13 +1120,17 @@ function parseProp(obj) {
     url:               obj.url                       || "",
     estado:            obj.estado                    || "Sin llamar",
     nota:              obj.nota                      || "",
-    fecha_ingreso:     obj.fecha_primera_vez         || "",
+    fecha_ingreso:     isoDate(obj.fecha_primera_vez),
     tipo_propiedad:    obj.tipo_propiedad             || "",
     tipo_operacion:    obj.tipo_operacion             || "",
-    excluida:          isTruthy(obj.excluida),
-    es_nuevo:          isTruthy(obj.es_nuevo),
-    bajo_precio:       isTruthy(obj.bajo_precio),
-    precio_anterior:   parseFloat(obj.precio_anterior) || null
+    excluida:             isTruthy(obj.excluida),
+    es_nuevo:             isTruthy(obj.es_nuevo),
+    bajo_precio:          isTruthy(obj.bajo_precio),
+    precio_anterior:      parseFloat(obj.precio_anterior) || null,
+    proxima_llamada:      isoDate(obj.proxima_llamada),
+    notas_llamada:        obj.notas_llamada        || "",
+    telefono_publicante:  obj.telefono_publicante  || "",
+    nombre_publicante:    obj.nombre_publicante    || "",
   };
 }
 
@@ -893,9 +1168,10 @@ async function guardarCambio(id, campo, valor) {
 }
 
 // ===== STATE =====
-let data     = [];
-let filtered = [];
-let activeId = null;
+let data           = [];
+let filtered       = [];
+let activeId       = null;
+let llamadasViewOpen = false;
 
 // Toggle filter state — with defaults
 const toggleState = {
@@ -949,13 +1225,20 @@ const COLUMNS = [
   { key:"m2_cubiertos",     label:"m\u00b2 cub",      numeric:true },
   { key:"m2_descubiertos",  label:"m\u00b2 des",      numeric:true },
   { key:"antiguedad",       label:"Antigüedad" },
-  { key:"estado",           label:"Estado" },
-  { key:"nota",             label:"Nota" },
-  { key:"ver",              label:"Ver" }
+  { key:"proxima_llamada",      label:"Próx. llamada" },
+  { key:"estado",               label:"Estado" },
+  { key:"telefono_publicante",  label:"Teléfono" },
+  { key:"nota",                 label:"Nota" },
+  { key:"ver",                  label:"Ver" }
 ];
 
 const PRECIO_SOSPECHOSO = 800;
 function isSospechoso(d) { return d.precio_m2_tasable > 0 && d.precio_m2_tasable < PRECIO_SOSPECHOSO; }
+
+/** Todas las columnas, siempre */
+function visibleColumns() {
+  return COLUMNS;
+}
 
 // ===== UTILS =====
 function fmtUSD(n) { return "USD " + n.toLocaleString("es-AR"); }
@@ -974,6 +1257,31 @@ function fmtFecha(s) {
   const partes = s.substring(0, 10).split("-");
   if (partes.length !== 3) return s;
   return partes[2] + "/" + partes[1] + "/" + partes[0];
+}
+/** Fecha de hoy en formato YYYY-MM-DD */
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+/** Devuelve clase CSS según si la fecha es pasada, hoy o futura */
+function fechaColor(iso) {
+  if (!iso) return "";
+  const today = todayISO();
+  if (iso < today) return "call-vencida";
+  if (iso === today) return "call-hoy";
+  return "call-futura";
+}
+/** "2026-04-21" → "21/04" */
+function fmtFechaCorta(iso) {
+  if (!iso) return "";
+  const p = iso.split("-");
+  if (p.length !== 3) return iso;
+  return p[2] + "/" + p[1];
+}
+/** Devuelve YYYY-MM-DD de hoy + n días */
+function fechaHoyMasDias(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 // ===== TOGGLE BUTTONS =====
@@ -1186,8 +1494,11 @@ function applyTopN() {
 function applySort() {
   const mode = document.getElementById("sortSelect").value;
   filtered.sort((a, b) => {
+    // Barrio siempre primero
+    const barrioD = a.orden_barrio - b.orden_barrio;
+    if (barrioD !== 0) return barrioD;
+    // Criterio secundario según dropdown
     if (mode === "pm2_asc") {
-      // Sospechosos al final
       const sa = isSospechoso(a) ? 1 : 0;
       const sb = isSospechoso(b) ? 1 : 0;
       if (sa !== sb) return sa - sb;
@@ -1203,7 +1514,7 @@ function applySort() {
 function buildHead() {
   const tr = document.getElementById("tableHead");
   tr.innerHTML = "";
-  COLUMNS.forEach(col => {
+  visibleColumns().forEach(col => {
     const th = document.createElement("th");
     th.textContent = col.label;
     tr.appendChild(th);
@@ -1218,7 +1529,7 @@ function renderTableBody() {
     if (d.id === activeId) tr.classList.add("active");
     if (d.excluida) tr.classList.add("row-excluida");
     tr.addEventListener("click", () => openPanel(d.id));
-    COLUMNS.forEach(col => {
+    visibleColumns().forEach(col => {
       const td = document.createElement("td");
       if (col.key === "fecha_ingreso") {
         td.style.whiteSpace = "nowrap";
@@ -1259,6 +1570,18 @@ function renderTableBody() {
       } else if (col.key === "estado") {
         const cls = ESTADO_CLASS[d.estado] || "";
         td.innerHTML = '<span class="estado-badge ' + cls + '">' + esc(d.estado) + "</span>";
+      } else if (col.key === "proxima_llamada") {
+        td.style.whiteSpace = "nowrap";
+        if (d.proxima_llamada) {
+          const color = fechaColor(d.proxima_llamada);
+          td.innerHTML = '<span class="' + color + '" style="font-weight:600">' + fmtFechaCorta(d.proxima_llamada) + '</span>';
+        } else {
+          td.textContent = "-";
+          td.style.color = "#94a3b8";
+        }
+      } else if (col.key === "telefono_publicante") {
+        td.classList.add("col-telefono");
+        renderTelCell(td, d);
       } else if (col.key === "nota") {
         td.classList.add("col-nota");
         td.textContent = d.nota || "-";
@@ -1319,10 +1642,57 @@ function renderCards() {
   });
 }
 
+// ===== INLINE PHONE EDITING (table) =====
+function renderTelCell(td, d) {
+  const val = d.telefono_publicante || "";
+  td.innerHTML = val
+    ? '<span class="tel-display">' + esc(val) + '</span>'
+    : '<span class="tel-display tel-empty">—</span>';
+
+  td.onclick = function(e) {
+    e.stopPropagation();           // evitar que se abra el panel
+    if (td.querySelector(".tel-input")) return;  // ya en edición
+
+    const original = d.telefono_publicante || "";
+    td.innerHTML = "";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = original;
+    input.className = "tel-input";
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    function commit() {
+      if (committed) return;
+      committed = true;
+      const newVal = input.value.trim();
+      d.telefono_publicante = newVal;
+      renderTelCell(td, d);
+      guardarCambio(d.id, "telefono_publicante", newVal);
+    }
+
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", function(e) {
+      if (e.key === "Enter")  { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") {
+        committed = true;           // bloquear commit del blur
+        d.telefono_publicante = original;
+        renderTelCell(td, d);
+      }
+    });
+  };
+}
+
 function render() {
   buildHead();
   renderTableBody();
   renderCards();
+  if (!llamadasViewOpen) {
+    document.getElementById("tableWrapper").removeAttribute("style");
+    document.getElementById("cardsWrapper").removeAttribute("style");
+  }
   document.getElementById("counter").textContent =
     "Mostrando " + filtered.length + " de " + data.length + " propiedades";
 }
@@ -1367,8 +1737,10 @@ function openPanel(id) {
   });
 
   document.getElementById("panelLink").href = d.url;
-  document.getElementById("panelEstado").value = d.estado;
-  document.getElementById("panelNota").value   = d.nota;
+  document.getElementById("panelEstado").value    = d.estado;
+  document.getElementById("panelNota").value      = d.nota;
+  document.getElementById("panelNombrePub").value   = d.nombre_publicante   || "";
+  document.getElementById("panelTelefonoPub").value = d.telefono_publicante || "";
 
   const btnExcluir = document.getElementById("btnExcluir");
   if (d.excluida) {
@@ -1377,6 +1749,76 @@ function openPanel(id) {
   } else {
     btnExcluir.textContent = "🚫 Excluir — es inmobiliaria";
     btnExcluir.className = "btn-excluir";
+  }
+
+  // ---- Bloque de llamadas ----
+  const callBlock = document.getElementById("panelCallBlock");
+
+  if (d.proxima_llamada) {
+    const color = fechaColor(d.proxima_llamada);
+    const statusLabel = color === "call-vencida" ? "vencida" : color === "call-hoy" ? "hoy" : "próxima";
+    callBlock.innerHTML =
+      '<div class="panel-call-block">' +
+        '<div class="call-date-row">' +
+          '<span class="call-date-label">Próxima llamada:</span>' +
+          '<span class="call-date ' + color + '">' + fmtFecha(d.proxima_llamada) +
+            '<span class="call-date-status">(' + statusLabel + ')</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="panel-field" style="margin:8px 0 0">' +
+          '<label>Notas de llamada</label>' +
+          '<textarea id="panelNotasLlamada" placeholder="Notas sobre la llamada...">' + esc(d.notas_llamada) + '</textarea>' +
+        '</div>' +
+        '<div class="call-actions">' +
+          '<button class="btn-call-action btn-llamada-hecha" id="btnLlamadaHecha">✓ Llamada hecha</button>' +
+          '<div class="call-reagendar">' +
+            '<span class="call-agendar-label">Reagendar en:</span>' +
+            '<input type="number" class="call-input" id="reagendarDias" value="7" min="1" max="365">' +
+            '<span class="call-agendar-label">días</span>' +
+            '<button class="btn-call-action btn-reagendar" id="btnReagendar">Reagendar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById("btnLlamadaHecha").addEventListener("click", async function() {
+      d.proxima_llamada = "";
+      d.notas_llamada   = "";
+      await guardarCambio(id, "proxima_llamada", "");
+      await guardarCambio(id, "notas_llamada",   "");
+      openPanel(id);
+    });
+    document.getElementById("btnReagendar").addEventListener("click", async function() {
+      const n = parseInt(document.getElementById("reagendarDias").value, 10);
+      if (!n || n < 1) return;
+      d.proxima_llamada = fechaHoyMasDias(n);
+      await guardarCambio(id, "proxima_llamada", d.proxima_llamada);
+      openPanel(id);
+    });
+    document.getElementById("panelNotasLlamada").addEventListener("blur", function() {
+      d.notas_llamada = this.value;
+      guardarCambio(id, "notas_llamada", this.value);
+    });
+
+  } else {
+    callBlock.innerHTML =
+      '<div class="panel-call-block">' +
+        '<div class="call-actions">' +
+          '<div class="call-reagendar">' +
+            '<span class="call-agendar-label">Llamar en:</span>' +
+            '<input type="number" class="call-input" id="agendarDias" value="7" min="1" max="365">' +
+            '<span class="call-agendar-label">días</span>' +
+            '<button class="btn-call-action btn-agendar" id="btnAgendar">Agendar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById("btnAgendar").addEventListener("click", async function() {
+      const n = parseInt(document.getElementById("agendarDias").value, 10);
+      if (!n || n < 1) return;
+      d.proxima_llamada = fechaHoyMasDias(n);
+      await guardarCambio(id, "proxima_llamada", d.proxima_llamada);
+      openPanel(id);
+    });
   }
 
   document.getElementById("overlay").classList.add("open");
@@ -1400,7 +1842,11 @@ document.getElementById("overlay").addEventListener("click", closePanel);
 document.getElementById("panelEstado").addEventListener("change", function() {
   if (!activeId) return;
   const d = data.find(x => x.id === activeId);
-  if (d) { d.estado = this.value; render(); guardarCambio(activeId, "estado", this.value); }
+  if (d) {
+    d.estado = this.value;
+    guardarCambio(activeId, "estado", this.value);
+    openPanel(activeId); // re-render panel (incl. call block) + table
+  }
 });
 
 document.getElementById("panelNota").addEventListener("blur", function() {
@@ -1408,6 +1854,34 @@ document.getElementById("panelNota").addEventListener("blur", function() {
   const d = data.find(x => x.id === activeId);
   if (d) { d.nota = this.value; render(); guardarCambio(activeId, "nota", this.value); }
 });
+
+// Publicante — nombre
+(function() {
+  const el = document.getElementById("panelNombrePub");
+  function save() {
+    if (!activeId) return;
+    const d = data.find(x => x.id === activeId);
+    if (!d || d.nombre_publicante === el.value) return;
+    d.nombre_publicante = el.value;
+    guardarCambio(activeId, "nombre_publicante", el.value);
+  }
+  el.addEventListener("blur",    save);
+  el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+})();
+
+// Publicante — teléfono
+(function() {
+  const el = document.getElementById("panelTelefonoPub");
+  function save() {
+    if (!activeId) return;
+    const d = data.find(x => x.id === activeId);
+    if (!d || d.telefono_publicante === el.value) return;
+    d.telefono_publicante = el.value;
+    guardarCambio(activeId, "telefono_publicante", el.value);
+  }
+  el.addEventListener("blur",    save);
+  el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+})();
 
 // Excluir / reincluir
 document.getElementById("btnExcluir").addEventListener("click", async function() {
@@ -1441,6 +1915,67 @@ document.getElementById("sortSelect").addEventListener("change", function() {
   applySort();
   render();
 });
+
+// ===== LLAMADAS VIEW =====
+function renderLlamadas() {
+  const today    = todayISO();
+  const props    = data.filter(d => d.proxima_llamada);
+  const vencidas = props.filter(d => d.proxima_llamada < today).sort((a, b) => a.proxima_llamada < b.proxima_llamada ? -1 : 1);
+  const hoy      = props.filter(d => d.proxima_llamada === today);
+  const proximas = props.filter(d => d.proxima_llamada > today).sort((a, b) => a.proxima_llamada < b.proxima_llamada ? -1 : 1);
+
+  function rowsHtml(items, colorCls) {
+    return items.map(d => {
+      const estadoCls = ESTADO_CLASS[d.estado] || "";
+      return '<div class="llamadas-row" data-id="' + esc(d.id) + '">' +
+        '<span class="llamadas-fecha ' + colorCls + '">' + fmtFechaCorta(d.proxima_llamada) + '</span>' +
+        '<span class="llamadas-barrio">' + esc(d.barrio_simple) + '</span>' +
+        '<span class="llamadas-dir">' + esc(d.direccion || '-') + '</span>' +
+        '<span class="llamadas-precio">' + fmtUSD(d.precio) + '</span>' +
+        '<span class="estado-badge ' + estadoCls + '">' + esc(d.estado) + '</span>' +
+        (d.notas_llamada ? '<span style="font-size:.8rem;color:#64748b;font-style:italic;flex-basis:100%;padding-left:58px">' + esc(d.notas_llamada) + '</span>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function groupHtml(title, items, colorCls) {
+    if (!items.length) return '';
+    return '<div class="llamadas-group">' +
+      '<div class="llamadas-group-title ' + colorCls + '">' + title + ' (' + items.length + ')</div>' +
+      rowsHtml(items, colorCls) +
+    '</div>';
+  }
+
+  const content = document.getElementById("llamadasContent");
+  if (!props.length) {
+    content.innerHTML = '<div class="llamadas-empty">No hay llamadas agendadas.</div>';
+  } else {
+    content.innerHTML =
+      groupHtml("🔴 Vencidas", vencidas, "call-vencida") +
+      groupHtml("🟡 Hoy",      hoy,      "call-hoy") +
+      groupHtml("⚪ Próximas", proximas,  "call-futura");
+  }
+
+  content.querySelectorAll(".llamadas-row").forEach(row => {
+    row.addEventListener("click", () => openPanel(row.dataset.id));
+  });
+}
+
+function toggleLlamadasView() {
+  llamadasViewOpen = !llamadasViewOpen;
+  document.getElementById("btnLlamadas").classList.toggle("active", llamadasViewOpen);
+  if (llamadasViewOpen) {
+    document.getElementById("tableWrapper").style.display  = "none";
+    document.getElementById("cardsWrapper").style.display  = "none";
+    document.getElementById("llamadasView").style.display  = "block";
+    renderLlamadas();
+  } else {
+    document.getElementById("llamadasView").style.display  = "none";
+    render();
+  }
+}
+
+document.getElementById("btnLlamadas").addEventListener("click", toggleLlamadasView);
 
 // ===== BOOT =====
 </script>
