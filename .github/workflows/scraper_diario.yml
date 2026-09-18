@@ -2,7 +2,8 @@ name: Scraper Diario ZonaProp
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # 8am Argentina (UTC-3)
+    - cron: '0 9 * * *'   # 6am Argentina (UTC-3)
+    - cron: '0 17 * * *'  # 14hs Argentina (UTC-3)
   workflow_dispatch:  # permite correrlo manualmente desde GitHub
 
 jobs:
