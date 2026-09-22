@@ -1,0 +1,24 @@
+services:
+  - type: cron
+    name: scraper-6am
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    schedule: "0 9 * * *"   # 6am Argentina (UTC-3)
+    region: oregon
+    envVars:
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        value: 13fWYaAwwe9qyVqfb08Qhu_zusak_uVvTQv3-1rhfwDA
+
+  - type: cron
+    name: scraper-2pm
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    schedule: "0 17 * * *"  # 14hs Argentina (UTC-3)
+    region: oregon
+    envVars:
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        value: 13fWYaAwwe9qyVqfb08Qhu_zusak_uVvTQv3-1rhfwDA
