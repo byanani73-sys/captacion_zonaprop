@@ -45,7 +45,54 @@ from scrapers.scraper_inicial import (
     parse_price, parse_int,
 )
 from pipeline.mapear_barrios import resolver_barrio
-from pipeline.extraer_tipo_url import parsear_slug
+
+# ---------------------------------------------------------------------------
+# Parseo de tipo de operación y tipo de propiedad desde la URL
+# ---------------------------------------------------------------------------
+# Formato del slug de 8 chars en /clasificado/XXXXXXXX-...:
+#   pos 0-1  operación  (ve / al / te)
+#   pos 2-3  "cl"       (fijo, ignorar)
+#   pos 4-7  tipo       (appa / phpa / capa / ...)
+_TIPO_OPERACION_MAP = {
+    "ve": "Venta",
+    "al": "Alquiler",
+    "te": "Alquiler Temporario",
+}
+_TIPO_PROPIEDAD_MAP = {
+    "appa": "Departamento",
+    "phpa": "PH",
+    "copa": "Consultorio",
+    "capa": "Casa",
+    "ocpa": "Oficina",
+    "fcpa": "Fondo de Comercio",
+    "gapa": "Cochera",
+    "trpa": "Terreno",
+    "edpa": "Edificio",
+    "lcpa": "Local Comercial",
+    "bgpa": "Galpón",
+    "bnpa": "Bóveda",
+    "depa": "Depósito",
+    "htpa": "Hotel",
+}
+
+import re as _slug_re
+_SLUG_RE = _slug_re.compile(r"/clasificado/([a-z]{8})-")
+
+def parsear_slug(url: str) -> tuple[str | None, str | None]:
+    """
+    Devuelve (tipo_operacion, tipo_propiedad) extraídos del slug de la URL.
+    Si el slug no se reconoce devuelve (None, None).
+    Si el código de tipo no está en la tabla devuelve tipo = 'Otro'.
+    """
+    if not url:
+        return None, None
+    m = _SLUG_RE.search(url)
+    if not m:
+        return None, None
+    slug = m.group(1)
+    ops  = _TIPO_OPERACION_MAP.get(slug[0:2])
+    tipo = _TIPO_PROPIEDAD_MAP.get(slug[4:8], "Otro")
+    return ops, tipo
 
 # ---------------------------------------------------------------------------
 # Browser config — misma config que scraper_inicial para local,
@@ -113,6 +160,17 @@ WORKSHEET_NAME   = "Hoja 1"
 
 USAR_SHEETS_COMO_DB = os.environ.get("GITHUB_ACTIONS") == "true"
 
+# Columnas que el usuario edita directamente en el Sheet.
+# NUNCA se sobreescriben en filas existentes; en filas nuevas reciben defaults.
+COLS_USUARIO = {
+    "estado",
+    "nota",
+    "proxima_llamada",
+    "notas_llamada",
+    "telefono_publicante",
+    "nombre_publicante",
+}
+
 # Parada temprana: si se recorren N páginas consecutivas sin encontrar
 # ninguna propiedad nueva, el scraper asume que ya pasó la frontera
 # de publicaciones recientes y detiene el escaneo.
@@ -131,6 +189,8 @@ COLUMNAS_REQUERIDAS = [
     ("m2_tasables",           "INTEGER"),
     ("precio_por_m2_total",   "REAL"),
     ("precio_por_m2_tasable", "REAL"),
+    ("nombre_publicante",     "TEXT"),
+    ("telefono_publicante",   "TEXT"),
 ]
 
 
@@ -150,6 +210,449 @@ def calcular_columnas(m2_totales, m2_cubiertos, precio_actual):
     pm2_total   = round(precio_actual / m2_totales, 2) if m2_totales > 0 else None
     pm2_tasable = round(precio_actual / m2_tas,    2) if m2_tas    > 0 else None
     return m2_desc, m2_tas, pm2_total, pm2_tasable
+
+
+# ---------------------------------------------------------------------------
+# Datos ficticios rotativos para el formulario de contacto de ZonaProp
+# ---------------------------------------------------------------------------
+FAKE_CONTACTS = [
+    {"nombre": "Martín García",       "email": "martin.garcia.baires@gmail.com",  "telefono": "1140123456"},
+    {"nombre": "Laura Fernández",     "email": "laurafernandez87@hotmail.com",     "telefono": "1152347890"},
+    {"nombre": "Diego Rodríguez",     "email": "diego.rodriguez.caba@gmail.com",   "telefono": "1163456789"},
+    {"nombre": "Ana Gómez",           "email": "ana.gomez.2024@gmail.com",         "telefono": "1174561234"},
+    {"nombre": "Pablo López",         "email": "pablolopez.ba@outlook.com",        "telefono": "1185672345"},
+    {"nombre": "Valentina Torres",    "email": "valen.torres.arg@gmail.com",       "telefono": "1196783456"},
+    {"nombre": "Sebastián Martínez",  "email": "seba.martinez.bsas@gmail.com",     "telefono": "1107894567"},
+    {"nombre": "Carolina Sánchez",    "email": "caro.sanchez.ok@hotmail.com",      "telefono": "1118905678"},
+    {"nombre": "Facundo Pérez",       "email": "facundo.perez.cba@gmail.com",      "telefono": "1129016789"},
+    {"nombre": "Sofía Romero",        "email": "sofia.romero.arg@gmail.com",       "telefono": "1130127890"},
+]
+_fake_idx = 0
+
+def next_fake_contact() -> dict:
+    global _fake_idx
+    c = FAKE_CONTACTS[_fake_idx % len(FAKE_CONTACTS)]
+    _fake_idx += 1
+    return c
+
+
+async def fetch_telefono(
+    pw,
+    url: str,
+    debug_path: str | None = None,
+    headless: bool = False,
+) -> tuple[str | None, str | None]:
+    """
+    Abre un browser stealth nuevo, navega a la página de la propiedad,
+    hace click en "Ver teléfono", completa el formulario de contacto si
+    aparece (con datos ficticios rotativos), y extrae el nombre y teléfono
+    del publicante.
+
+    Devuelve: (nombre_publicante, telefono_publicante)
+      — cualquiera puede ser None si no se encontró.
+    Si hay bloqueo o error irrecuperable loguea y devuelve (None, None).
+
+    debug_path — si se especifica, guarda un screenshot en esa ruta
+                 cada vez que no se logra obtener el teléfono.
+    headless   — False (default) usa browser visible, que bypasea Cloudflare.
+                 True para entornos sin display (launchd/CI); el teléfono
+                 probablemente no se obtendrá pero el nombre sí.
+    """
+    TIMEOUT_NAV = 25_000
+    TIMEOUT_EL  = 6_000
+
+    async def _screenshot(page):
+        if not debug_path:
+            return
+        try:
+            from pathlib import Path as _Path
+            _Path(debug_path).parent.mkdir(parents=True, exist_ok=True)
+            await page.screenshot(path=debug_path, full_page=True)
+            print(f"    [debug] Screenshot guardado en {debug_path}")
+        except Exception as se:
+            print(f"    [debug] No se pudo guardar screenshot: {se}")
+
+    # Selectores para el botón "Ver teléfono"
+    BTN_SELS = [
+        '[data-qa="PHONE_WHATSAPP_CONTACT"]',
+        '[data-qa="LEAD_PHONE"]',
+        '[data-qa="CONTACT_PHONE"]',
+        'button:has-text("Ver teléfono")',
+        'a:has-text("Ver teléfono")',
+        '[class*="phone-btn"]',
+        '[class*="phoneBtn"]',
+        '[class*="show-phone"]',
+        '[class*="action-phone"]',
+    ]
+    # Selectores para extraer el teléfono ya visible
+    PHONE_SELS = [
+        'a[href^="tel:"]',
+        '[data-qa="PHONE_NUMBER"]',
+        '[data-qa="PHONE_VALUE"]',
+        '[class*="phone-number"]',
+        '[class*="phoneNumber"]',
+        '[class*="call-value"]',
+        '[class*="number-phone"]',
+    ]
+    # Selectores para el nombre del publicante
+    NOMBRE_SELS = [
+        '[data-qa="PUBLISHER_NAME"]',
+        '[data-qa="OWNER_NAME"]',
+        '[class*="publisher-name"]',
+        '[class*="publisherName"]',
+        '[class*="owner-name"]',
+        '[class*="contact-name"]',
+        '[class*="advertiser-name"]',
+    ]
+
+    import re as _re
+
+    browser_args = LOCAL_BROWSER_ARGS if headless else [
+        "--disable-blink-features=AutomationControlled",
+    ]
+    browser = await pw.chromium.launch(headless=headless, args=browser_args)
+    try:
+        # Minimizar la ventana del browser en Mac para que no moleste al usuario.
+        # Se prueba con "Chromium" primero (Playwright usa Chromium empaquetado);
+        # si falla, se intenta con "Google Chrome".
+        if not headless:
+            import subprocess as _sp
+            await asyncio.sleep(0.5)
+            for _app in ("Chromium", "Google Chrome"):
+                _r = _sp.run(
+                    ["osascript", "-e",
+                     f'tell application "{_app}" to set miniaturized of every window to true'],
+                    capture_output=True,
+                )
+                if _r.returncode == 0:
+                    break
+
+        context = await browser.new_context(
+            user_agent=LOCAL_USER_AGENT,
+            viewport=LOCAL_VIEWPORT,
+            locale="es-AR",
+        )
+        page = await context.new_page()
+        await _stealth.apply_stealth_async(page)
+
+        # ── Interceptar respuestas de red para capturar el teléfono ──────────
+        # ZonaProp retorna el teléfono en una respuesta JSON tras el submit del
+        # formulario de contacto. Se activa solo DESPUÉS de hacer submit para
+        # evitar falsos positivos de las requests de carga inicial de la página.
+        phone_from_api    = [None]   # lista para poder modificar desde la closure
+        capture_active    = [False]  # se activa solo tras el submit
+        FAKE_PHONE_STRS   = {c["telefono"] for c in FAKE_CONTACTS}
+        # Patrón estricto: números argentinos de 10-13 dígitos con prefijo válido
+        AR_PHONE_RE = _re.compile(
+            r'(?:(?:\+54|0054)\s*)?'         # prefijo internacional opcional
+            r'(?:0?(?:11|15|[2-9]\d{1,3}))'  # código de área (11=CABA, 15=cel, etc.)
+            r'[\s\-]?\d{4}[\s\-]?\d{4}'      # número local (8 dígitos)
+        )
+
+        # Solo aceptar respuestas del propio dominio de ZonaProp.
+        # Cualquier número capturado de terceros (Google Ads, New Relic,
+        # reCAPTCHA, analytics, etc.) es un falso positivo.
+        ZONAPROP_DOMAIN = "zonaprop.com.ar"
+
+        # Endpoints de ZonaProp con falsos positivos (precios, IDs, fechas)
+        SKIP_ZP_PATHS = ("/recommended", "/similar", "/related")
+
+        # Prefijos argentinos válidos (dígitos iniciales del número limpio)
+        AR_VALID_PREFIXES = ("11", "15", "54", "91", "01", "549")
+
+        # El endpoint que efectivamente devuelve el teléfono del publicante
+        LEADS_ENDPOINT = "rp-api/leads"
+
+        async def intercept_response(response):
+            if phone_from_api[0] or not capture_active[0]:
+                return
+            try:
+                url_r = response.url
+                # Ignorar todo lo que no sea zonaprop.com.ar
+                if ZONAPROP_DOMAIN not in url_r:
+                    return
+                # Ignorar endpoints internos con falsos positivos
+                if any(p in url_r for p in SKIP_ZP_PATHS):
+                    return
+                if response.status != 200:
+                    return
+                ct = response.headers.get("content-type", "")
+                if not any(x in ct for x in ("json", "javascript", "text")):
+                    return
+                body = await response.text()
+                if not body:
+                    return
+                is_leads = LEADS_ENDPOINT in url_r
+                for m in AR_PHONE_RE.finditer(body):
+                    cleaned = _re.sub(r'\D', '', m.group())
+                    if cleaned in FAKE_PHONE_STRS:
+                        continue
+                    if len(cleaned) < 10 or len(cleaned) > 13:
+                        continue
+                    if not any(cleaned.startswith(p) for p in AR_VALID_PREFIXES):
+                        continue
+                    phone_from_api[0] = cleaned
+                    src = "leads" if is_leads else "api"
+                    print(f"    [tel] teléfono capturado ({src}): {cleaned} ({url_r[:70]})")
+                    break
+            except Exception:
+                pass
+
+        page.on("response", intercept_response)
+        # ─────────────────────────────────────────────────────────────────────
+
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_NAV)
+        except Exception as e:
+            print(f"    [tel] error navegación: {type(e).__name__}")
+            return None, None
+
+        if not await wait_for_cf(page, timeout_secs=20):
+            print(f"    [tel] Cloudflare bloqueó")
+            await _screenshot(page)
+            return None, None
+
+        await page.wait_for_timeout(1500)
+
+        # --- Intentar extraer nombre antes de clickear (aparece visible) ---
+        nombre_val = None
+        for sel in NOMBRE_SELS:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    t = (await el.text_content() or "").strip()
+                    if t:
+                        nombre_val = t
+                        break
+            except Exception:
+                pass
+
+        # --- Buscar y clickear botón "Ver teléfono" ---
+        phone_btn = None
+        for sel in BTN_SELS:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    phone_btn = el
+                    break
+            except Exception:
+                pass
+
+        if not phone_btn:
+            # No hay botón — puede que el teléfono esté directamente visible
+            pass
+        else:
+            # Registrar posición de todos los inputs ANTES del click
+            # para poder identificar los del modal (los nuevos) después
+            pre_click_positions: set[tuple] = set()
+            try:
+                all_pre = await page.query_selector_all(
+                    'input:not([type="hidden"]):not([type="search"])'
+                    ':not([type="checkbox"]):not([type="radio"])'
+                )
+                for el in all_pre:
+                    try:
+                        if await el.is_visible():
+                            box = await el.bounding_box()
+                            if box:
+                                pre_click_positions.add(
+                                    (round(box["x"]), round(box["y"]))
+                                )
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            try:
+                await phone_btn.click()
+            except Exception:
+                pass
+
+            # Dar tiempo al modal para renderizarse completamente
+            await page.wait_for_timeout(2500)
+
+            # --- Detectar inputs del modal via JavaScript (evita problemas de
+            #     pointer-events con el background overlay del modal) ---
+            modal_input_count = await page.evaluate("""(prePositions) => {
+                const modal = document.querySelector('#modal-mount');
+                if (!modal) return 0;
+                const inputs = modal.querySelectorAll(
+                    'input:not([type="hidden"]):not([type="search"])' +
+                    ':not([type="checkbox"]):not([type="radio"])'
+                );
+                return inputs.length;
+            }""", list(pre_click_positions))
+
+            print(f"    [tel] {modal_input_count} input(s) de modal detectados")
+
+            if modal_input_count > 0:
+                contact = next_fake_contact()
+
+                # Llenar el formulario vía JavaScript (React-compatible):
+                # usa el setter nativo del prototipo para que React detecte
+                # el cambio y habilite el botón Enviar.
+                filled_count = await page.evaluate("""(vals) => {
+                    const modal = document.querySelector('#modal-mount');
+                    if (!modal) return 0;
+                    const inputs = Array.from(modal.querySelectorAll(
+                        'input:not([type="hidden"]):not([type="search"])' +
+                        ':not([type="checkbox"]):not([type="radio"])'
+                    ));
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value'
+                    ).set;
+                    let filled = 0;
+                    inputs.slice(0, vals.length).forEach((inp, i) => {
+                        setter.call(inp, vals[i]);
+                        inp.dispatchEvent(new Event('input',  {bubbles: true}));
+                        inp.dispatchEvent(new Event('change', {bubbles: true}));
+                        filled++;
+                    });
+                    return filled;
+                }""", [contact["nombre"], contact["email"], contact["telefono"]])
+
+                print(f"    [tel] {filled_count} campo(s) llenados con datos de contacto")
+                await page.wait_for_timeout(400)
+
+                # Activar captura de API ANTES del submit
+                capture_active[0] = True
+
+                # Submit vía JavaScript (también evita el problema del overlay)
+                submit_result = await page.evaluate("""() => {
+                    const modal = document.querySelector('#modal-mount');
+                    if (!modal) return 'no-modal';
+                    const btn = modal.querySelector('button[type="submit"]') ||
+                                Array.from(modal.querySelectorAll('button')).find(b =>
+                                    /enviar|ver tel|continuar/i.test(b.textContent)
+                                );
+                    if (btn) { btn.click(); return 'clicked: ' + btn.textContent.trim().substring(0, 30); }
+                    const form = modal.querySelector('form');
+                    if (form) { form.requestSubmit(); return 'form-submit'; }
+                    return 'not-found';
+                }""")
+                print(f"    [tel] submit: {submit_result}")
+
+                # Esperar activamente a que ZonaProp procese el lead (hasta 6s)
+                await page.wait_for_timeout(1500)
+                for tick in range(8):
+                    # 1. ¿Ya lo tenemos de la interceptación de API?
+                    if phone_from_api[0]:
+                        print(f"    [tel] teléfono API confirmado en tick {tick}")
+                        break
+                    # 2. ¿Apareció algún selector de teléfono en el DOM?
+                    found_early = False
+                    for sel in ['a[href^="tel:"]'] + PHONE_SELS:
+                        try:
+                            el = await page.query_selector(sel)
+                            if el and await el.is_visible():
+                                found_early = True
+                                break
+                        except Exception:
+                            pass
+                    if found_early:
+                        print(f"    [tel] teléfono DOM detectado en tick {tick}")
+                        break
+                    await page.wait_for_timeout(500)
+            else:
+                await page.wait_for_timeout(1500)
+
+        # Screenshot intermedio — captura el estado de la página en el momento
+        # de intentar extraer el teléfono (útil para ver si el número apareció
+        # con otro selector o si la página cambió de estado)
+        if debug_path:
+            inter_path = debug_path.replace(".png", "_pre_extract.png")
+            try:
+                from pathlib import Path as _Path
+                _Path(inter_path).parent.mkdir(parents=True, exist_ok=True)
+                await page.screenshot(path=inter_path, full_page=True)
+            except Exception:
+                pass
+
+        # --- Extraer teléfono del publicante ---
+        telefono_val = None
+
+        # 0) Resultado de intercepción de red (endpoint rp-api/leads más confiable)
+        if phone_from_api[0]:
+            telefono_val = phone_from_api[0]
+
+        # 1) Modal de éxito: ZonaProp muestra "Teléfonos disponibles: 54 9 XXXXXXXXXX"
+        #    Extraemos el texto del modal y buscamos el número con regex.
+        if not telefono_val:
+            try:
+                modal_text = await page.evaluate("""() => {
+                    const modal = document.querySelector('#modal-mount');
+                    return modal ? modal.innerText : '';
+                }""")
+                fake_phones = {c["telefono"] for c in FAKE_CONTACTS}
+                for m in AR_PHONE_RE.finditer(modal_text or ""):
+                    cleaned = _re.sub(r'\D', '', m.group())
+                    if cleaned in fake_phones:
+                        continue
+                    if len(cleaned) < 10 or len(cleaned) > 13:
+                        continue
+                    telefono_val = cleaned
+                    print(f"    [tel] teléfono extraído del modal DOM: {cleaned}")
+                    break
+            except Exception:
+                pass
+
+        # 2) Selectores CSS estándar
+        if not telefono_val:
+            for sel in PHONE_SELS:
+                try:
+                    el = await page.query_selector(sel)
+                    if el:
+                        if sel.startswith("a[href"):
+                            href = await el.get_attribute("href") or ""
+                            val = href.replace("tel:", "").strip()
+                        else:
+                            val = (await el.text_content() or "").strip()
+                        if val and any(c.isdigit() for c in val):
+                            telefono_val = val
+                            break
+                except Exception:
+                    pass
+
+        # 3) Fallback: regex sobre el texto completo de la página
+        if not telefono_val:
+            try:
+                body_text = await page.evaluate("() => document.body.innerText")
+                fake_phones = {c["telefono"] for c in FAKE_CONTACTS}
+                for m in AR_PHONE_RE.finditer(body_text or ""):
+                    cleaned = _re.sub(r'\D', '', m.group())
+                    if cleaned in fake_phones:
+                        continue
+                    if len(cleaned) < 10 or len(cleaned) > 13:
+                        continue
+                    telefono_val = cleaned
+                    break
+            except Exception:
+                pass
+
+        # Segundo intento nombre (después del click, puede haber aparecido)
+        if not nombre_val:
+            for sel in NOMBRE_SELS:
+                try:
+                    el = await page.query_selector(sel)
+                    if el:
+                        t = (await el.text_content() or "").strip()
+                        if t:
+                            nombre_val = t
+                            break
+                except Exception:
+                    pass
+
+        if not telefono_val:
+            print(f"    [!] No se pudo obtener teléfono — posible bloqueo ZonaProp")
+            await _screenshot(page)
+
+        return nombre_val, telefono_val
+
+    except Exception as e:
+        print(f"    [tel] excepción inesperada: {e}")
+        return None, None
+    finally:
+        await browser.close()
 
 
 # ---------------------------------------------------------------------------
@@ -215,11 +718,12 @@ def cargar_sheet_state(ws) -> dict:
                 existentes[id_zp] = None
 
     return {
-        "ws": ws,
-        "headers": headers,
-        "h_idx": h_idx,
+        "ws":        ws,
+        "headers":   headers,
+        "h_idx":     h_idx,
         "id_to_row": id_to_row,
         "existentes": existentes,
+        "all_values": all_values,   # reutilizado en resetear_es_nuevo_sheets
     }
 
 
@@ -262,7 +766,8 @@ def insertar_en_db(insertados: list) -> None:
                     antiguedad, disposicion, orientacion, luminosidad,
                     direccion, barrio, barrio_simple, orden_barrio,
                     descripcion, tipo_operacion, tipo_propiedad,
-                    es_nuevo, activa, bajo_precio, precio_anterior
+                    es_nuevo, activa, bajo_precio, precio_anterior,
+                    nombre_publicante, telefono_publicante
                 ) VALUES (
                     :id_zonaprop, :url, :fecha_primera_vez, :fecha_actualizacion,
                     :precio_actual, :moneda, :expensas,
@@ -272,7 +777,8 @@ def insertar_en_db(insertados: list) -> None:
                     :antiguedad, :disposicion, :orientacion, :luminosidad,
                     :direccion, :barrio, :barrio_simple, :orden_barrio,
                     :descripcion, :tipo_operacion, :tipo_propiedad,
-                    :es_nuevo, :activa, :bajo_precio, :precio_anterior
+                    :es_nuevo, :activa, :bajo_precio, :precio_anterior,
+                    :nombre_publicante, :telefono_publicante
                 )
             """, row)
         except sqlite3.IntegrityError:
@@ -302,15 +808,20 @@ def actualizar_precios_db(actualizados: list, hoy: str) -> None:
 # Sheets helpers (modo GitHub Actions)
 # ---------------------------------------------------------------------------
 def resetear_es_nuevo_sheets(sh: dict) -> int:
-    ws    = sh["ws"]
-    h_idx = sh["h_idx"]
+    """
+    Pone es_nuevo=FALSE en todas las filas del Sheet que lo tengan en 1/TRUE.
+    Usa batch_update: una sola llamada a la API sin importar cuántas filas haya.
+    Reutiliza el all_values ya cargado en sh para no hacer un segundo get.
+    """
+    ws         = sh["ws"]
+    h_idx      = sh["h_idx"]
+    all_values = sh.get("all_values", [])
 
     if "es_nuevo" not in h_idx:
         return 0
 
     col_i        = h_idx["es_nuevo"]
     es_nuevo_col = col_letter(col_i)
-    all_values   = ws.get_all_values()
 
     updates = []
     for r_num, row in enumerate(all_values, 1):
@@ -318,7 +829,7 @@ def resetear_es_nuevo_sheets(sh: dict) -> int:
             continue
         val = row[col_i] if len(row) > col_i else ""
         if val in ("1", "TRUE", "True", "true"):
-            updates.append({"range": f"{es_nuevo_col}{r_num}", "values": [["FALSE"]]})
+            updates.append({"range": f"{es_nuevo_col}{r_num}", "values": [[0]]})
 
     if updates:
         ws.batch_update(updates)
@@ -332,17 +843,30 @@ def escribir_nuevos_en_sheets(sh: dict, insertados: list) -> None:
     ws      = sh["ws"]
     headers = sh["headers"]
 
+    # Defaults para columnas de usuario en filas nuevas.
+    # telefono_publicante y nombre_publicante SÍ se incluyen si el scraper los
+    # capturó (no son "datos del usuario" en una fila recién creada).
+    DEFAULTS_USUARIO = {
+        "estado":          "Sin llamar",
+        "nota":            "",
+        "proxima_llamada": "",
+        "notas_llamada":   "",
+    }
+
     nuevas_filas = []
     for row in insertados:
         fila = []
         for h in headers:
-            val = row.get(h)
-            if val is None:
-                fila.append("")
-            elif isinstance(val, bool):
-                fila.append("TRUE" if val else "FALSE")
+            if h in DEFAULTS_USUARIO:
+                fila.append(DEFAULTS_USUARIO[h])
             else:
-                fila.append(val)
+                val = row.get(h)
+                if val is None:
+                    fila.append("")
+                elif isinstance(val, bool):
+                    fila.append("TRUE" if val else "FALSE")
+                else:
+                    fila.append(val)
         nuevas_filas.append(fila)
 
     all_values       = ws.get_all_values()
@@ -426,7 +950,7 @@ async def recorrer_listado(pw, existentes: dict, hoy: str, max_paginas=None) -> 
         await list_page.wait_for_timeout(random.randint(3000, 6000))
         if not await wait_for_cf(list_page):
             print("  [!] Cloudflare bloqueó la página inicial")
-            return ids_vistos, insertados, actualizados
+            return ids_vistos, insertados, actualizados, 0
 
         page_num = 0
 
@@ -533,6 +1057,16 @@ async def procesar_nuevos(pw, nuevos: list, hoy: str) -> list:
         except Exception as e:
             print(f"  [{i:>4}/{total}] [error detalle] {id_zp}: {e}")
 
+        nombre_publicante   = None
+        telefono_publicante = None
+        try:
+            await asyncio.sleep(random.uniform(2, 4))
+            nombre_publicante, telefono_publicante = await fetch_telefono(
+                pw, url, headless=True  # launchd corre sin display
+            )
+        except Exception as e:
+            print(f"  [{i:>4}/{total}] [error teléfono] {id_zp}: {e}")
+
         m2_totales   = detail.get("m2_totales")  or card.get("m2_totales")
         m2_cubiertos = detail.get("m2_cubiertos")
         precio       = card.get("precio_actual")
@@ -568,16 +1102,19 @@ async def procesar_nuevos(pw, nuevos: list, hoy: str) -> list:
             "orden_barrio":          orden_barrio,
             "descripcion":           card.get("descripcion"),
             "tipo_operacion":        tipo_op,
-            "tipo_propiedad":        tipo_prop or detail.get("tipo_propiedad"),
+            "tipo_propiedad":        tipo_prop,
             "es_nuevo":              1,
             "activa":                1,
             "bajo_precio":           0,
             "precio_anterior":       None,
+            "nombre_publicante":     nombre_publicante,
+            "telefono_publicante":   telefono_publicante,
         }
 
         insertados.append(row)
         pm2_str = f"USD {pm2_tas:,.0f}/m²" if pm2_tas else "sin m²"
-        print(f"  [{i:>4}/{total}] ✓ {barrio_simple:<18} {pm2_str}  {url.split('/')[-1][:40]}")
+        tel_str = f" 📞{telefono_publicante}" if telefono_publicante else ""
+        print(f"  [{i:>4}/{total}] ✓ {barrio_simple:<18} {pm2_str}  {url.split('/')[-1][:40]}{tel_str}")
 
     return insertados
 
@@ -586,16 +1123,24 @@ async def procesar_nuevos(pw, nuevos: list, hoy: str) -> list:
 # Fase 5 — Sincronizar Sheets (modo local: sync incremental al final)
 # ---------------------------------------------------------------------------
 def sincronizar_sheets(insertados: list, actualizados: list) -> None:
-    if not insertados and not actualizados:
-        print("  Nada que sincronizar con Sheets")
-        return
-
     print("  Conectando al Sheet...")
     ws = connect_sheets()
     sh = cargar_sheet_state(ws)
 
     if not sh["headers"]:
         print("  [!] Sheet vacío — omitiendo sync")
+        return
+
+    # Resetear es_nuevo ANTES de escribir las nuevas del día,
+    # para que el Sheet refleje exactamente las propiedades de HOY.
+    n_reseteados = resetear_es_nuevo_sheets(sh)
+    if n_reseteados:
+        print(f"  ✓ {n_reseteados} filas con es_nuevo reseteadas en Sheet")
+    else:
+        print("  es_nuevo: sin filas que resetear")
+
+    if not insertados and not actualizados:
+        print("  Nada más que sincronizar con Sheets")
         return
 
     headers   = sh["headers"]
@@ -611,14 +1156,14 @@ def sincronizar_sheets(insertados: list, actualizados: list) -> None:
         ya_en_sheet      = [r for r in insertados if     r["id_zonaprop"] in id_to_row]
         realmente_nuevos = [r for r in insertados if not r["id_zonaprop"] in id_to_row]
 
-        # Filas que ya existen: actualizar solo precio_actual, precio_anterior,
-        # bajo_precio y es_nuevo. Nunca tocar estado ni nota.
-        COLS_SEGURAS = ["precio_actual", "precio_anterior", "bajo_precio", "es_nuevo"]
+        # Filas que ya existen: actualizar solo columnas del scraper.
+        # NUNCA tocar columnas de usuario (COLS_USUARIO): estado, nota, teléfono, etc.
+        COLS_SCRAPER_UPDATE = ["precio_actual", "precio_anterior", "bajo_precio", "es_nuevo"]
         updates = []
         for row in ya_en_sheet:
             row_num = id_to_row[row["id_zonaprop"]]
-            for col in COLS_SEGURAS:
-                if col in h_idx:
+            for col in COLS_SCRAPER_UPDATE:
+                if col in h_idx and col not in COLS_USUARIO:
                     val = row.get(col, "")
                     if val is None: val = ""
                     updates.append({
@@ -628,19 +1173,26 @@ def sincronizar_sheets(insertados: list, actualizados: list) -> None:
         if updates:
             ws.batch_update(updates)
             print(f"  ✓ {len(ya_en_sheet)} filas ya existentes — actualizadas precio/es_nuevo "
-                  f"(estado y nota intactos)")
+                  f"(columnas de usuario intactas)")
             time.sleep(1)
 
-        # Filas verdaderamente nuevas: append al final con estado='Sin llamar', nota=''
+        # Filas verdaderamente nuevas: append al final.
+        # Para columnas de usuario se aplican defaults; nunca se usa row.get() en ellas.
         if realmente_nuevos:
+            DEFAULTS_USUARIO = {
+                "estado":          "Sin llamar",
+                "nota":            "",
+                "proxima_llamada": "",
+                "notas_llamada":   "",
+                # telefono_publicante y nombre_publicante SÍ se incluyen
+                # desde el scraper si fueron capturados (fila recién creada).
+            }
             nuevas_filas = []
             for row in realmente_nuevos:
                 fila = []
                 for h in headers:
-                    if h == "estado":
-                        fila.append("Sin llamar")
-                    elif h == "nota":
-                        fila.append("")
+                    if h in DEFAULTS_USUARIO:
+                        fila.append(DEFAULTS_USUARIO[h])
                     else:
                         val = row.get(h)
                         if val is None:
