@@ -731,6 +731,45 @@ def cargar_sheet_state(ws) -> dict:
 # DB helpers (modo local)
 # ---------------------------------------------------------------------------
 def init_db(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS propiedades (
+            id_zonaprop          TEXT PRIMARY KEY,
+            url                  TEXT,
+            fecha_primera_vez    TEXT,
+            fecha_actualizacion  TEXT,
+            precio_actual        INTEGER,
+            moneda               TEXT,
+            expensas             INTEGER,
+            m2_totales           INTEGER,
+            m2_cubiertos         INTEGER,
+            m2_descubiertos      INTEGER,
+            m2_tasables          INTEGER,
+            precio_por_m2_total  REAL,
+            precio_por_m2_tasable REAL,
+            ambientes            INTEGER,
+            dormitorios          INTEGER,
+            banos                INTEGER,
+            toilettes            INTEGER,
+            cocheras             INTEGER,
+            antiguedad           TEXT,
+            disposicion          TEXT,
+            orientacion          TEXT,
+            luminosidad          TEXT,
+            direccion            TEXT,
+            barrio               TEXT,
+            barrio_simple        TEXT,
+            orden_barrio         INTEGER,
+            descripcion          TEXT,
+            tipo_operacion       TEXT,
+            tipo_propiedad       TEXT,
+            es_nuevo             INTEGER DEFAULT 0,
+            activa               INTEGER DEFAULT 1,
+            bajo_precio          INTEGER DEFAULT 0,
+            precio_anterior      INTEGER,
+            nombre_publicante    TEXT,
+            telefono_publicante  TEXT
+        )
+    """)
     existentes = {row[1] for row in conn.execute("PRAGMA table_info(propiedades)")}
     for nombre, tipo in COLUMNAS_REQUERIDAS:
         if nombre not in existentes:
@@ -1278,6 +1317,7 @@ async def main(max_paginas=None, sin_sheets=False):
     # Modo local — SQLite como fuente de verdad
     # -----------------------------------------------------------------------
     else:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
         print("\n[DB] Verificando schema...")
         init_db(conn)
