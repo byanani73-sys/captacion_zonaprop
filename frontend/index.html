@@ -277,21 +277,9 @@ td.col-telefono:hover { background: #f0f7ff !important; }
 }
 td.col-tipo { font-size: .8rem; white-space: nowrap; }
 td.col-op   { font-size: .78rem; white-space: nowrap; color: #64748b; }
-td.col-ver  { text-align: center; white-space: nowrap; }
-td.col-ver a {
-  display: inline-block;
-  padding: 3px 9px;
-  border: 1px solid #2563eb;
-  border-radius: 5px;
-  background: #eff6ff;
-  color: #2563eb;
-  text-decoration: none;
-  font-size: .75rem;
-  font-weight: 600;
-  letter-spacing: .01em;
-  transition: background .12s, color .12s;
-}
-td.col-ver a:hover { background: #2563eb; color: #fff; }
+td.col-ver  { text-align: center; }
+td.col-ver a { color: #2563eb; text-decoration: none; font-size: 1.1rem; font-weight: 700; }
+td.col-ver a:hover { color: #1d4ed8; }
 
 /* ===== MOBILE PROPERTY CARDS ===== */
 .cards-wrapper {
@@ -1057,15 +1045,12 @@ document.getElementById("btnLogout").addEventListener("click", function() { auth
 
 // ===== BOTÓN ACTUALIZAR =====
 const TRIGGER_SECRET = "captacion-zp-2024-secreto";
-const IS_LOCAL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-const TRIGGER_URL = IS_LOCAL ? "/trigger-scraper" : "/.netlify/functions/trigger-scraper";
-
 document.getElementById("btnActualizar").addEventListener("click", async function() {
   const btn = this;
   btn.disabled = true;
   btn.textContent = "↻ Iniciando...";
   try {
-    const res = await fetch(TRIGGER_URL, {
+    const res = await fetch("/.netlify/functions/trigger-scraper", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ secret: TRIGGER_SECRET }),
@@ -1570,9 +1555,7 @@ function renderTableBody() {
         td.innerHTML = html;
       } else if (col.key === "ver") {
         td.classList.add("col-ver");
-        td.innerHTML = d.url
-          ? '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">ZonaProp \u2197</a>'
-          : '<span style="color:#9ca3af;font-size:.75rem">\u2014</span>';
+        td.innerHTML = '<a href="' + esc(d.url) + '" target="_blank" rel="noopener" title="Ver en ZonaProp" onclick="event.stopPropagation()">\u2197</a>';
       } else if (col.key === "precio_m2_tasable") {
         td.classList.add("col-precio-m2");
         if (isSospechoso(d)) {

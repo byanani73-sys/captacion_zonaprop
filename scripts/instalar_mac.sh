@@ -8,7 +8,7 @@ set -e
 REPO_URL="https://github.com/byanani73-sys/captacion_zonaprop.git"
 INSTALL_DIR="$HOME/Documents/Scraper de captacion inmobiliaria"
 PLIST_NAME="com.captacion.zonaprop"
-HORA=9   # 9am
+HORA=6   # 6am
 MINUTO=0
 
 echo ""
@@ -127,63 +127,18 @@ launchctl unload "$PLIST_PATH" 2>/dev/null || true
 launchctl load "$PLIST_PATH"
 echo "  ✓ Tarea programada para las ${HORA}:$(printf '%02d' $MINUTO)am todos los días"
 
-# ── 8. Servidor local (UI + botón a demanda) ──────────────
-echo "▶ Configurando servidor local (http://localhost:8080)..."
-
-PLIST_SRV="$HOME/Library/LaunchAgents/com.captacion.servidor.plist"
-SRV_SCRIPT="$INSTALL_DIR/scripts/servidor_local.py"
-SRV_LOG_OUT="$HOME/Library/Logs/captacion_servidor.log"
-SRV_LOG_ERR="$HOME/Library/Logs/captacion_servidor_error.log"
-
-cat > "$PLIST_SRV" <<PLIST2
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.captacion.servidor</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>${PYTHON_PATH}</string>
-        <string>${SRV_SCRIPT}</string>
-    </array>
-
-    <key>WorkingDirectory</key>
-    <string>${INSTALL_DIR}</string>
-
-    <key>StandardOutPath</key>
-    <string>${SRV_LOG_OUT}</string>
-
-    <key>StandardErrorPath</key>
-    <string>${SRV_LOG_ERR}</string>
-
-    <key>KeepAlive</key>
-    <true/>
-
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>
-PLIST2
-
-launchctl unload "$PLIST_SRV" 2>/dev/null || true
-launchctl load "$PLIST_SRV"
-echo "  ✓ Servidor local iniciado — abrí http://localhost:8080 en el navegador"
-
-# ── 9. Resumen ────────────────────────────────────────────
+# ── 8. Resumen ────────────────────────────────────────────
 echo ""
 echo "======================================================"
 echo "  ✅ Instalación completada"
 echo "======================================================"
 echo ""
-echo "  📅 Scraper automático: todos los días a las ${HORA}:$(printf '%02d' $MINUTO)am"
-echo "  🌐 UI local:          http://localhost:8080"
-echo "     (botón '↻ Actualizar' corre el scraper a demanda)"
+echo "  El scraper va a correr automáticamente todos los días"
+echo "  a las ${HORA}:$(printf '%02d' $MINUTO)am, siempre que la compu esté prendida."
 echo ""
-echo "  Logs del scraper:  ~/Library/Logs/scraper_diario.log"
-echo "  Logs del servidor: ~/Library/Logs/captacion_servidor.log"
+echo "  Para ver los logs:"
+echo "  cat ~/Library/Logs/scraper_diario.log"
 echo ""
-echo "  Prueba manual:"
+echo "  Para correrlo manualmente ahora (prueba):"
 echo "  cd \"$INSTALL_DIR\" && venv/bin/python3 scrapers/scraper_diario.py --max-paginas 2"
 echo ""
