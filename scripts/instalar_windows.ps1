@@ -87,7 +87,7 @@ Write-Host ">> Configurando tarea automatica diaria ($($HORA):$('{0:D2}' -f $MIN
 $PYTHON_EXE  = "$INSTALL_DIR\venv\Scripts\python.exe"
 $SCRAPER_PY  = "$INSTALL_DIR\scrapers\scraper_diario.py"
 
-schtasks /delete /tn "CaptacionScraper" /f 2>$null | Out-Null
+Unregister-ScheduledTask -TaskName "CaptacionScraper" -Confirm:$false -ErrorAction SilentlyContinue
 
 $action   = New-ScheduledTaskAction -Execute $PYTHON_EXE -Argument "`"$SCRAPER_PY`"" -WorkingDirectory "$INSTALL_DIR"
 $trigger  = New-ScheduledTaskTrigger -Daily -At "$($HORA):$('{0:D2}' -f $MINUTO)"
@@ -101,7 +101,7 @@ Write-Host ">> Configurando servidor local (http://localhost:8080)..."
 
 $SRV_PY = "$INSTALL_DIR\scripts\servidor_local.py"
 
-schtasks /delete /tn "CaptacionServidor" /f 2>$null | Out-Null
+Unregister-ScheduledTask -TaskName "CaptacionServidor" -Confirm:$false -ErrorAction SilentlyContinue
 
 $srvAction   = New-ScheduledTaskAction -Execute $PYTHON_EXE -Argument "`"$SRV_PY`"" -WorkingDirectory "$INSTALL_DIR"
 $srvTrigger  = New-ScheduledTaskTrigger -AtLogOn
