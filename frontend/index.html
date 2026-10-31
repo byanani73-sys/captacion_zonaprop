@@ -727,9 +727,18 @@ td.col-ver a:hover { background: #2563eb; color: #fff; }
   padding: 6px 14px; border-radius: 6px; font-size: .8rem;
   cursor: pointer; font-family: inherit;
   transition: background .15s, color .15s;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .btn-actualizar:hover { background: #1f2937; color: #fff; }
-.btn-actualizar:disabled { opacity: .5; cursor: not-allowed; }
+.btn-actualizar:disabled { opacity: .7; cursor: not-allowed; }
+.btn-actualizar .spin {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid rgba(203,213,225,.35);
+  border-top-color: #cbd5e1;
+  border-radius: 50%;
+  animation: girar .7s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
 .btn-logout {
   background: none; border: 1px solid #475569; color: #cbd5e1;
   padding: 6px 14px; border-radius: 6px; font-size: .8rem;
@@ -1060,10 +1069,55 @@ const TRIGGER_SECRET = "captacion-zp-2024-secreto";
 const IS_LOCAL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 const TRIGGER_URL = IS_LOCAL ? "/trigger-scraper" : "/.netlify/functions/trigger-scraper";
 
+let _pollInterval = null;
+
+function btnReset(btn) {
+  btn.disabled = false;
+  btn.innerHTML = "↻ Actualizar";
+}
+
+function btnSpinner(btn, label) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>' + label;
+}
+
+function startPolling(btn) {
+  if (_pollInterval) return;
+  _pollInterval = setInterval(async () => {
+    try {
+      const r = await fetch("/scraper-status");
+      const s = await r.json();
+      const elapsed = s.elapsed_seg || 0;
+      const mins = Math.floor(elapsed / 60), segs = elapsed % 60;
+      const tiempoStr = mins > 0 ? `${mins}m ${segs}s` : `${segs}s`;
+
+      if (s.running) {
+        btnSpinner(btn, ` Corriendo… ${tiempoStr}`);
+      } else {
+        clearInterval(_pollInterval); _pollInterval = null;
+        if (s.error) {
+          btn.innerHTML = "✗ Error";
+          btn.disabled = false;
+          setTimeout(() => btnReset(btn), 5000);
+        } else {
+          const nuevas = s.nuevas !== null ? s.nuevas : "?";
+          const dur    = s.duracion || tiempoStr;
+          btn.innerHTML = `✓ ${nuevas} nuevas · ${dur}`;
+          btn.disabled = false;
+          setTimeout(() => btnReset(btn), 8000);
+        }
+      }
+    } catch (e) {
+      // servidor no responde — probablemente terminó
+      clearInterval(_pollInterval); _pollInterval = null;
+      btnReset(btn);
+    }
+  }, 5000);
+}
+
 document.getElementById("btnActualizar").addEventListener("click", async function() {
   const btn = this;
-  btn.disabled = true;
-  btn.textContent = "↻ Iniciando...";
+  btnSpinner(btn, " Iniciando…");
   try {
     const res = await fetch(TRIGGER_URL, {
       method: "POST",
@@ -1072,17 +1126,24 @@ document.getElementById("btnActualizar").addEventListener("click", async functio
     });
     const json = await res.json();
     if (json.ok) {
-      btn.textContent = "✓ Scraper iniciado";
-      setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 4000);
+      if (IS_LOCAL) {
+        btnSpinner(btn, " Corriendo… 0s");
+        startPolling(btn);
+      } else {
+        btn.innerHTML = "✓ Scraper iniciado";
+        btn.disabled = false;
+        setTimeout(() => btnReset(btn), 4000);
+      }
     } else {
-      btn.textContent = "✗ Error";
-      console.error("trigger-scraper error:", json);
-      setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 3000);
+      btn.innerHTML = "✗ " + (json.error || "Error");
+      btn.disabled = false;
+      setTimeout(() => btnReset(btn), 3000);
     }
   } catch (err) {
-    btn.textContent = "✗ Error";
-    console.error("trigger-scraper fetch error:", err);
-    setTimeout(() => { btn.textContent = "↻ Actualizar"; btn.disabled = false; }, 3000);
+    btn.innerHTML = "✗ Error";
+    btn.disabled = false;
+    console.error("trigger-scraper:", err);
+    setTimeout(() => btnReset(btn), 3000);
   }
 });
 
