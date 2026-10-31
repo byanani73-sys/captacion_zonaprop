@@ -8,6 +8,7 @@ Servidor local para la Mac de papá.
 import json
 import re
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -15,9 +16,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent
 FRONTEND = BASE_DIR / "frontend"
-PYTHON   = BASE_DIR / "venv" / "Scripts" / "python.exe"
-if not PYTHON.exists():
-    PYTHON = BASE_DIR / "venv" / "bin" / "python3"
+PYTHON   = Path(sys.executable)
 SCRAPER  = BASE_DIR / "scrapers" / "scraper_diario.py"
 SECRET   = "captacion-zp-2024-secreto"
 PORT     = 8080
